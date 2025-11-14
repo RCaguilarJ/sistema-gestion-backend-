@@ -16,10 +16,10 @@ const Paciente = sequelize.define('Paciente', {
     type: DataTypes.STRING,
   },
   hba1c: {
-    type: DataTypes.DECIMAL(4, 1), // Ej: 12.5
+    type: DataTypes.DECIMAL(4, 1),
   },
   imc: {
-    type: DataTypes.DECIMAL(4, 1), // Ej: 25.5
+    type: DataTypes.DECIMAL(4, 1),
   },
   riesgo: {
     type: DataTypes.ENUM('Alto', 'Medio', 'Bajo'),
@@ -30,10 +30,8 @@ const Paciente = sequelize.define('Paciente', {
   ultimaVisita: {
     type: DataTypes.DATE,
   },
-  // (Aquí podemos añadir más campos como 'edad', 'genero', 'telefono', etc. después)
 }, {
-  // Opciones adicionales
-  timestamps: true, // sequelize añadirá createdAt y updatedAt automáticamente
+  timestamps: true,
 });
 
 export default Paciente;
