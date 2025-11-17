@@ -2,9 +2,13 @@
 import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import dotenv from "dotenv";
 
-// Esta debería ser una variable de entorno secreta, pero la pondremos aquí por ahora
-const JWT_SECRET = "mi-secreto-muy-seguro-para-tokens";
+// Cargar variables de entorno
+dotenv.config();
+
+// Obtener el secreto JWT de las variables de entorno
+const JWT_SECRET = process.env.JWT_SECRET || "mi-secreto-muy-seguro-para-tokens";
 
 // --- FUNCIÓN DE REGISTRO (LA QUE FALTABA) ---
 export const register = async (req, res) => {
@@ -44,6 +48,16 @@ export const register = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error("Error en el registro:", error);
+    
+    // Si el error es de conexión a la base de datos
+    if (error.name === 'SequelizeConnectionError' || error.name === 'SequelizeConnectionRefusedError') {
+      return res.status(503).json({ 
+        message: "Servicio de base de datos no disponible. Por favor, intente más tarde.", 
+        error: "Database connection failed" 
+      });
+    }
+    
     res
       .status(500)
       .json({ message: "Error en el servidor", error: error.message });
@@ -83,6 +97,16 @@ export const login = async (req, res) => {
       },
     });
   } catch (error) {
+    console.error("Error en el login:", error);
+    
+    // Si el error es de conexión a la base de datos
+    if (error.name === 'SequelizeConnectionError' || error.name === 'SequelizeConnectionRefusedError') {
+      return res.status(503).json({ 
+        message: "Servicio de base de datos no disponible. Por favor, intente más tarde.", 
+        error: "Database connection failed" 
+      });
+    }
+    
     res
       .status(500)
       .json({ message: "Error en el servidor", error: error.message });
