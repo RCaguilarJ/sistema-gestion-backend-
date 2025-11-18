@@ -1,4 +1,3 @@
-// models/User.js
 import { DataTypes } from "sequelize";
 import sequelize from "../config/database.js";
 import bcrypt from "bcryptjs";
@@ -6,6 +5,11 @@ import bcrypt from "bcryptjs";
 const User = sequelize.define(
   "User",
   {
+    // Nombre real (ej. "Dr. Juan Pérez") - Requerido por tu diseño
+    nombre: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
     username: {
       type: DataTypes.STRING,
       allowNull: false,
@@ -15,25 +19,26 @@ const User = sequelize.define(
       type: DataTypes.STRING,
       allowNull: false,
       unique: true,
-      validate: {
-        isEmail: true,
-      },
+      validate: { isEmail: true },
     },
     password: {
       type: DataTypes.STRING,
       allowNull: false,
     },
-    // --- ¡CAMBIO AQUÍ! ---
-    // Añadimos la columna para guardar el rol del usuario.
+    // Roles definidos en tu imagen
     role: {
-      type: DataTypes.ENUM("Administrador", "Doctor", "Nutriólogo"),
+      type: DataTypes.ENUM("ADMIN", "DOCTOR", "NUTRI", "PSY", "PATIENT"),
       allowNull: false,
-      defaultValue: "Doctor", // Por defecto, creamos usuarios como 'Doctor'
+      defaultValue: "DOCTOR",
+    },
+    // Estatus (Activo/Inactivo)
+    estatus: {
+      type: DataTypes.ENUM("Activo", "Inactivo"),
+      defaultValue: "Activo",
     },
   },
   {
     hooks: {
-      // Esto encripta la contraseña automáticamente antes de guardarla
       beforeCreate: async (user) => {
         const salt = await bcrypt.genSalt(10);
         user.password = await bcrypt.hash(user.password, salt);

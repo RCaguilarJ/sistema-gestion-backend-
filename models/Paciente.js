@@ -4,7 +4,7 @@ import sequelize from '../config/database.js';
 
 const Paciente = sequelize.define('Paciente', {
   // --- Datos Generales (image_c2c7e7.png) ---
-  nombre: {
+  s: {
     type: DataTypes.STRING,
     allowNull: false,
   },
