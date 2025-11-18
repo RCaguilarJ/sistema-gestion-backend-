@@ -12,13 +12,25 @@ export const register = async (req, res) => {
     // 1. Obtenemos y validamos los campos del body
     const { nombre, username, email, password, role } = req.body;
 
-    if (!nombre || !username || !email || !password) {
+    // Trim and basic presence checks
+    const nombreTrim = nombre ? String(nombre).trim() : "";
+    const usernameTrim = username ? String(username).trim() : "";
+    const emailTrim = email ? String(email).trim() : "";
+    const passwordTrim = password ? String(password).trim() : "";
+
+    if (!nombreTrim || !usernameTrim || !emailTrim || !passwordTrim) {
       return res.status(400).json({
         message: "Faltan campos requeridos: nombre, username, email o password",
       });
     }
 
-    const userExists = await User.findOne({ where: { email } });
+    // Basic email format check to return a clear 400 before Sequelize runs its validators
+    const emailRegex = /^\S+@\S+\.\S+$/;
+    if (!emailRegex.test(emailTrim)) {
+      return res.status(400).json({ message: "Email inválido" });
+    }
+
+    const userExists = await User.findOne({ where: { email: emailTrim } });
     if (userExists) {
       return res.status(400).json({ message: "El correo ya está registrado." });
     }
@@ -30,10 +42,10 @@ export const register = async (req, res) => {
 
     // 3. Creamos el usuario (el hook en el modelo encripta la contraseña)
     const newUser = await User.create({
-      nombre,
-      username,
-      email,
-      password,
+      nombre: nombreTrim,
+      username: usernameTrim,
+      email: emailTrim,
+      password: passwordTrim,
       role: finalRole,
     });
 
@@ -60,10 +72,20 @@ export const register = async (req, res) => {
     // Loguear el error completo en el servidor para depuración
     console.error("Error en register:", error);
 
+    // Manejar errores de validación de Sequelize de forma amigable
+    if (error.name === "SequelizeValidationError") {
+      const details = error.errors.map((e) => e.message);
+      return res.status(400).json({ message: "Validation error", details });
+    }
+
+    // Manejar errores de constraint (p.ej. unique)
+    if (error.name === "SequelizeUniqueConstraintError") {
+      const details = error.errors.map((e) => e.message);
+      return res.status(409).json({ message: "Constraint error", details });
+    }
+
     // Devolver un body con detalles mínimamente útiles para el frontend
-    res
-      .status(500)
-      .json({ message: "Error en el servidor", details: error.message });
+    res.status(500).json({ message: "Error en el servidor", details: error.message });
   }
 };
 

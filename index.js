@@ -53,6 +53,33 @@ const startServer = async () => {
     });
     console.log("✅ Usuario de prueba creado: admin@test.com / admin123");
 
+    // Crear otros usuarios de prueba: nutriólogo y doctor
+    const nutriUser = await User.create({
+      nombre: "Nutriólogo",
+      username: "nutri",
+      email: "nutri@test.com",
+      password: "nutri123",
+      role: "NUTRI",
+      estatus: "Activo",
+    });
+
+    const doctorUser = await User.create({
+      nombre: "Doctor",
+      username: "doctor",
+      email: "doctor@test.com",
+      password: "doctor123",
+      role: "DOCTOR",
+      estatus: "Activo",
+    });
+
+    console.log("✅ Usuarios de prueba creados: nutri@test.com / nutri123, doctor@test.com / doctor123");
+
+    // Crear algunos pacientes asignados al nutriólogo
+    await Paciente.create({ nombre: 'Paciente A', curp: 'CURP0001', nutriologoId: nutriUser.id });
+    await Paciente.create({ nombre: 'Paciente B', curp: 'CURP0002', nutriologoId: nutriUser.id });
+    await Paciente.create({ nombre: 'Paciente C', curp: 'CURP0003' });
+    console.log('✅ Pacientes de prueba creados (dos asignados al nutriólogo)');
+
     app.listen(PORT, () => {
       console.log(`Servidor backend corriendo en http://localhost:${PORT}`);
     });

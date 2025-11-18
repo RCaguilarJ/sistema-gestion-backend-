@@ -4,7 +4,7 @@ import sequelize from '../config/database.js';
 
 const Paciente = sequelize.define('Paciente', {
   // --- Datos Generales (image_c2c7e7.png) ---
-  s: {
+  nombre: {
     type: DataTypes.STRING,
     allowNull: false,
   },
@@ -80,6 +80,13 @@ const Paciente = sequelize.define('Paciente', {
   },
   tipoTerapia: {
     type: DataTypes.STRING,
+  },
+
+  // Referencia al nutriólogo (User.id) que atiende al paciente.
+  // Será usada para filtrar pacientes accesibles por el rol NUTRI.
+  nutriologoId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
   },
 
   // (Campo del figma anterior que no está en el nuevo, pero lo dejamos)
