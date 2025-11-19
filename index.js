@@ -6,6 +6,9 @@ import db from "./config/database.js";
 import User from "./models/User.js";
 import Paciente from "./models/Paciente.js";
 
+import nutricionRoutes from './routes/nutricionRoutes.js';
+import documentosRoutes from './routes/documentosRoutes.js';
+
 // --- 2. Importar Archivos de Rutas ---
 import authRoutes from "./routes/authRoutes.js";
 import pacienteRoutes from "./routes/pacienteRoutes.js";
@@ -20,6 +23,10 @@ const corsOrigin = process.env.CORS_ORIGIN || "http://localhost:5173";
 app.use(cors({ origin: corsOrigin }));
 
 app.use(express.json());
+
+app.use('/api/nutricion', nutricionRoutes);
+
+app.use('/api/documentos', documentosRoutes);
 
 // --- 3. Conectar las Rutas ---
 app.use("/api/auth", authRoutes);
