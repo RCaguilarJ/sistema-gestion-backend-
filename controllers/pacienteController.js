@@ -1,129 +1,97 @@
 // controllers/pacienteController.js
 import Paciente from '../models/Paciente.js';
+import { Sequelize } from 'sequelize';
+import db from '../models/index.js'; // Importamos el objeto db centralizado
 
-// Helper: normalize and validate incoming paciente payloads
+const { User } = db; // Para obtener datos del usuario asignado
+
+// Definiciones de ENUMS (para reusar en validación)
 const allowedGeneros = ['Masculino', 'Femenino', 'Otro'];
 const allowedTipoDiabetes = ['Tipo 1', 'Tipo 2', 'Gestacional', 'Otro'];
 const allowedEstatus = ['Activo', 'Inactivo'];
 const allowedRiesgo = ['Alto', 'Medio', 'Bajo'];
 
-function normalizePacientePayload(body = {}, user = null) {
+// Helper: normaliza y valida datos. 
+function normalizePacientePayload(body = {}, user = null, isUpdate = false) {
   const payload = {};
   const errors = [];
 
-  // Nombre: accept several possible keys
   const nombreRaw = body.nombre || body.nombreCompleto || body.name || body.nombre_paciente;
   const nombre = nombreRaw !== undefined ? String(nombreRaw).trim() : '';
   if (nombre) payload.nombre = nombre;
-  else errors.push('Campo requerido: nombre');
+  else if (!isUpdate) errors.push('Campo requerido: nombre'); 
 
-  // CURP (required)
   const curpRaw = body.curp;
   const curp = curpRaw !== undefined ? String(curpRaw).trim() : '';
   if (curp) payload.curp = curp;
-  else errors.push('Campo requerido: curp');
-
-  // Fecha de nacimiento: try to coerce to YYYY-MM-DD
+  else if (!isUpdate) errors.push('Campo requerido: curp');
+  
   if (body.fechaNacimiento) {
     const d = new Date(body.fechaNacimiento);
     if (!isNaN(d)) payload.fechaNacimiento = d.toISOString().slice(0, 10);
     else errors.push('fechaNacimiento inválida');
+  } else if (isUpdate && body.fechaNacimiento === '') {
+      payload.fechaNacimiento = null;
   }
 
-  // Genero: normalize to allowed values
-  if (body.genero) {
-    const g = String(body.genero).trim();
-    const match = allowedGeneros.find(x => x.toLowerCase() === g.toLowerCase());
-    if (match) payload.genero = match;
-    else errors.push('genero inválido');
-  }
-
-  // Contacto
-  if (body.telefono) payload.telefono = String(body.telefono).trim();
-  if (body.email) {
-    const email = String(body.email).trim();
-    const emailRegex = /^\S+@\S+\.\S+$/;
-    if (emailRegex.test(email)) payload.email = email;
-    else errors.push('email inválido');
-  }
-
-  // Domicilio y cadenas opcionales
-  ['calleNumero', 'colonia', 'municipio', 'estado', 'codigoPostal', 'programa', 'tipoTerapia'].forEach((f) => {
-    if (body[f] !== undefined && body[f] !== null) payload[f] = String(body[f]).trim();
+  // Cadenas y ENUMs
+  ['genero', 'telefono', 'email', 'calleNumero', 'colonia', 'municipio', 'estado', 'codigoPostal', 
+   'tipoDiabetes', 'fechaDiagnostico', 'programa', 'tipoTerapia', 'estatus', 'riesgo', 'ultimaVisita']
+   .forEach((f) => {
+    if (body[f] !== undefined) {
+        const value = String(body[f] || '').trim();
+        if (value.length > 0) {
+            payload[f] = value;
+            if (f === 'email') {
+                const emailRegex = /^\S+@\S+\.\S+$/;
+                if (!emailRegex.test(value)) errors.push('email inválido');
+            }
+        } else if (isUpdate) {
+            payload[f] = null;
+        }
+    }
   });
 
-  // Tipo de diabetes (enum)
-  if (body.tipoDiabetes) {
-    const t = String(body.tipoDiabetes).trim();
-    const match = allowedTipoDiabetes.find(x => x.toLowerCase() === t.toLowerCase());
-    if (match) payload.tipoDiabetes = match;
-    else errors.push('tipoDiabetes inválido');
-  }
-
-  // Números: estatura, peso, hba1c, imc
-  if (body.estaturaCm !== undefined) {
-    const n = parseInt(body.estaturaCm, 10);
-    if (!isNaN(n)) payload.estaturaCm = n;
-    else errors.push('estaturaCm inválida');
-  }
-  if (body.pesoKg !== undefined) {
-    const n = parseFloat(body.pesoKg);
-    if (!isNaN(n)) payload.pesoKg = n;
-    else errors.push('pesoKg inválido');
-  }
-  if (body.hba1c !== undefined) {
-    const n = parseFloat(body.hba1c);
-    if (!isNaN(n)) payload.hba1c = n;
-    else errors.push('hba1c inválido');
-  }
-  if (body.imc !== undefined) {
-    const n = parseFloat(body.imc);
-    if (!isNaN(n)) payload.imc = n;
-    else errors.push('imc inválido');
-  }
-
-  // estatus / riesgo enums
-  if (body.estatus) {
-    const e = String(body.estatus).trim();
-    const match = allowedEstatus.find(x => x.toLowerCase() === e.toLowerCase());
-    if (match) payload.estatus = match;
-    else errors.push('estatus inválido');
-  }
-  if (body.riesgo) {
-    const r = String(body.riesgo).trim();
-    const match = allowedRiesgo.find(x => x.toLowerCase() === r.toLowerCase());
-    if (match) payload.riesgo = match;
-    else errors.push('riesgo inválido');
-  }
-
-  // nutriologoId: if user is NUTRI, override; otherwise accept numeric if provided
+  // Manejo de Números (Limpia cadenas vacías y verifica que sean números)
+  ['estaturaCm', 'pesoKg', 'hba1c', 'imc'].forEach((f) => {
+    if (body[f] !== undefined) {
+      if (body[f] === '' && isUpdate) {
+        payload[f] = null;
+      } else {
+        const n = parseFloat(body[f]);
+        if (!isNaN(n)) {
+          payload[f] = n; 
+        } else if (body[f] !== '') {
+          errors.push(`${f} inválido: debe ser un número.`);
+        }
+      }
+    }
+  });
+  
+  // Asignación de nutriologoId
   if (user && user.role === 'NUTRI') payload.nutriologoId = user.id;
   else if (body.nutriologoId !== undefined) {
     const n = parseInt(body.nutriologoId, 10);
     if (!isNaN(n)) payload.nutriologoId = n;
+    else if (isUpdate && body.nutriologoId === '') payload.nutriologoId = null;
   }
 
   return { payload, errors };
 }
 
-// Nota: los endpoints de pacientes deben ser protegidos mediante middleware
-// que añade `req.user` (id, email, role). Aquí usamos `req.user.role` para
-// filtrar cuando el usuario es NUTRI.
 
 // --- OBTENER TODOS LOS PACIENTES ---
 export const getAllPacientes = async (req, res) => {
   try {
-    // Si el usuario es nutriólogo, devolvemos solo sus pacientes
+    let whereClause = {};
     if (req.user && req.user.role === 'NUTRI') {
-      const pacientes = await Paciente.findAll({ where: { nutriologoId: req.user.id } });
-      return res.status(200).json(pacientes);
+      whereClause = { nutriologoId: req.user.id };
     }
-
-    // Para ADMIN/DOCTOR y otros roles permitidos devolvemos todos
-    const pacientes = await Paciente.findAll();
     
-    // 2. Envía los pacientes como respuesta JSON
-    // (Nota: A diferencia de Strapi, no anidamos los datos. Es un array simple)
+    const pacientes = await Paciente.findAll({ 
+        where: whereClause,
+        include: [{ model: User, as: 'Nutriologo', attributes: ['id', 'nombre'] }]
+    });
     res.status(200).json(pacientes);
 
   } catch (error) {
@@ -131,11 +99,11 @@ export const getAllPacientes = async (req, res) => {
   }
 };
 
+
 // --- CREAR UN NUEVO PACIENTE ---
-// (Esta la usaremos para el botón "Nuevo Paciente")
 export const createPaciente = async (req, res) => {
   try {
-    const { payload, errors } = normalizePacientePayload(req.body, req.user);
+    const { payload, errors } = normalizePacientePayload(req.body, req.user, false); 
     if (errors.length) {
       return res.status(400).json({ message: 'Validation error', details: errors });
     }
@@ -145,19 +113,88 @@ export const createPaciente = async (req, res) => {
   } catch (error) {
     console.error('Error al crear paciente:', error);
 
-    // Manejar errores de validación de Sequelize de forma amigable
-    if (error.name === 'SequelizeValidationError') {
-      const details = error.errors.map((e) => e.message);
-      return res.status(400).json({ message: 'Validation error', details });
-    }
-
     if (error.name === 'SequelizeUniqueConstraintError') {
       const details = error.errors.map((e) => e.message);
       return res.status(409).json({ message: 'Constraint error', details });
     }
 
-    res.status(400).json({ message: 'Error al crear el paciente', error: error.message });
+    res.status(500).json({ message: 'Error al crear el paciente', error: error.message });
   }
 };
 
-// (Aquí pondremos getPacienteById, updatePaciente, etc. después)
+
+// --- OBTENER UN PACIENTE POR ID (IMPLEMENTACIÓN DE LA RUTA DINÁMICA) ---
+export const getPaciente = async (req, res) => {
+    try {
+      const { id } = req.params; // Captura el ID de la URL
+      
+      let whereClause = { id };
+      if (req.user && req.user.role === 'NUTRI') {
+          whereClause = { id, nutriologoId: req.user.id };
+      }
+
+      // Buscamos el paciente por ID
+      const paciente = await Paciente.findOne({ 
+          where: whereClause,
+          include: [{ model: User, as: 'Nutriologo', attributes: ['id', 'nombre'] }]
+      });
+
+      if (!paciente) {
+        // Devolvemos un 404 con JSON (Express's default 404 is HTML)
+        return res.status(404).json({ message: 'Paciente no encontrado o acceso denegado.' }); 
+      }
+
+      // Devolvemos el paciente encontrado
+      res.status(200).json(paciente);
+      
+    } catch (error) {
+      console.error('Error al obtener paciente por ID:', error);
+      res.status(500).json({ message: 'Error interno del servidor.', error: error.message });
+    }
+};
+
+// --- ACTUALIZAR UN PACIENTE POR ID (EDIT) ---
+export const updatePaciente = async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const { payload, errors } = normalizePacientePayload(req.body, req.user, true); 
+      if (errors.length) {
+        return res.status(400).json({ message: 'Validation error', details: errors });
+      }
+
+      let whereClause = { id };
+      if (req.user && req.user.role === 'NUTRI') {
+          whereClause = { id, nutriologoId: req.user.id }; 
+      }
+      
+      const [rowsAffected] = await Paciente.update(payload, { 
+          where: whereClause,
+      });
+
+      if (rowsAffected === 0) {
+          const pacienteExists = await Paciente.findByPk(id);
+          if (!pacienteExists) {
+               return res.status(404).json({ message: 'Paciente no encontrado para actualizar.' });
+          }
+      }
+      
+      const updatedPaciente = await Paciente.findByPk(id, {
+          include: [{ model: User, as: 'Nutriologo', attributes: ['id', 'nombre'] }]
+      });
+
+      res.status(200).json(updatedPaciente);
+
+    } catch (error) {
+      console.error('Error al actualizar paciente:', error);
+      
+      if (error.name === 'SequelizeUniqueConstraintError') {
+          const details = error.errors.map((e) => e.message);
+          return res.status(409).json({ message: 'Constraint error: El CURP o Email ya están registrados.', details });
+      }
+      
+      res.status(500).json({ message: 'Error interno del servidor al actualizar el paciente.' });
+    }
+};
+
+// --- EXPORTACIÓN FINAL ---

@@ -38,47 +38,53 @@ const startServer = async () => {
     await db.authenticate();
     console.log("✅ Conexión a la base de datos establecida.");
 
-    // con las nuevas columnas (role, estatus, nombre).
-    await db.sync({ force: true });
-    console.log("✅ Modelos sincronizados con la base de datos.");
+    // Sincronizar modelos sin forzar borrados: usa `alter` para aplicar cambios
+    // sin intentar dropear tablas que puedan tener FK (más seguro en BD con datos).
+    await db.sync({ alter: true });
+    console.log("✅ Modelos sincronizados con la base de datos (alter: true).");
 
-    // Crear usuario de prueba
-    const testUser = await User.create({
-      nombre: "Administrador",
-      username: "admin",
-      email: "admin@test.com",
-      password: "admin123",
-      role: "ADMIN",
-      estatus: "Activo",
-    });
-    console.log("✅ Usuario de prueba creado: admin@test.com / admin123");
+    // Crear usuarios y pacientes de prueba solo si la tabla de usuarios está vacía
+    const userCount = await User.count();
+    if (userCount === 0) {
+      const testUser = await User.create({
+        nombre: "Administrador",
+        username: "admin",
+        email: "admin@test.com",
+        password: "admin123",
+        role: "ADMIN",
+        estatus: "Activo",
+      });
+      console.log("✅ Usuario de prueba creado: admin@test.com / admin123");
 
-    // Crear otros usuarios de prueba: nutriólogo y doctor
-    const nutriUser = await User.create({
-      nombre: "Nutriólogo",
-      username: "nutri",
-      email: "nutri@test.com",
-      password: "nutri123",
-      role: "NUTRI",
-      estatus: "Activo",
-    });
+      // Crear otros usuarios de prueba: nutriólogo y doctor
+      const nutriUser = await User.create({
+        nombre: "Nutriólogo",
+        username: "nutri",
+        email: "nutri@test.com",
+        password: "nutri123",
+        role: "NUTRI",
+        estatus: "Activo",
+      });
 
-    const doctorUser = await User.create({
-      nombre: "Doctor",
-      username: "doctor",
-      email: "doctor@test.com",
-      password: "doctor123",
-      role: "DOCTOR",
-      estatus: "Activo",
-    });
+      const doctorUser = await User.create({
+        nombre: "Doctor",
+        username: "doctor",
+        email: "doctor@test.com",
+        password: "doctor123",
+        role: "DOCTOR",
+        estatus: "Activo",
+      });
 
-    console.log("✅ Usuarios de prueba creados: nutri@test.com / nutri123, doctor@test.com / doctor123");
+      console.log("✅ Usuarios de prueba creados: nutri@test.com / nutri123, doctor@test.com / doctor123");
 
-    // Crear algunos pacientes asignados al nutriólogo
-    await Paciente.create({ nombre: 'Paciente A', curp: 'CURP0001', nutriologoId: nutriUser.id });
-    await Paciente.create({ nombre: 'Paciente B', curp: 'CURP0002', nutriologoId: nutriUser.id });
-    await Paciente.create({ nombre: 'Paciente C', curp: 'CURP0003' });
-    console.log('✅ Pacientes de prueba creados (dos asignados al nutriólogo)');
+      // Crear algunos pacientes asignados al nutriólogo
+      await Paciente.create({ nombre: 'Paciente A', curp: 'CURP0001', nutriologoId: nutriUser.id });
+      await Paciente.create({ nombre: 'Paciente B', curp: 'CURP0002', nutriologoId: nutriUser.id });
+      await Paciente.create({ nombre: 'Paciente C', curp: 'CURP0003' });
+      console.log('✅ Pacientes de prueba creados (dos asignados al nutriólogo)');
+    } else {
+      console.log('ℹ️ Usuarios de prueba ya existen — saltando creación de datos de ejemplo.');
+    }
 
     app.listen(PORT, () => {
       console.log(`Servidor backend corriendo en http://localhost:${PORT}`);

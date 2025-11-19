@@ -1,18 +1,32 @@
 // routes/pacienteRoutes.js
-import express from "express";
+import { Router } from 'express';
+// Usamos 'authenticate' (el nombre correcto de la función en tu middleware)
+import { authenticate } from '../middleware/authMiddleware.js'; 
 import {
   getAllPacientes,
   createPaciente,
-} from "../controllers/pacienteController.js";
-import { authenticate } from "../middleware/authMiddleware.js";
+  getPaciente,       // Importa el controlador para GET /:id
+  updatePaciente,    // Importa el controlador para PUT /:id
+} from '../controllers/pacienteController.js'; 
 
-const router = express.Router();
+const router = Router();
 
-// Todas las rutas de pacientes requieren autenticación
-// GET /api/pacientes
-router.get("/", authenticate, getAllPacientes);
+// NOTA IMPORTANTE: Asegúrate de que el middleware se aplique correctamente en index.js:
+// app.use("/api/pacientes", authenticate, pacienteRoutes);
+// O si el middleware solo se aplica en las rutas:
 
-// POST /api/pacientes
-router.post("/", authenticate, createPaciente);
+// GET /api/pacientes/
+router.get('/', authenticate, getAllPacientes);
+
+// POST /api/pacientes/
+router.post('/', authenticate, createPaciente);
+
+// --- RUTA DINÁMICA CLAVE ---
+// GET /api/pacientes/:id (Para ver los detalles del paciente)
+// Express matcheará '/4', '/5', etc., y pondrá el valor en req.params.id
+router.get('/:id', authenticate, getPaciente); 
+
+// PUT /api/pacientes/:id (Para editar los detalles del paciente)
+router.put('/:id', authenticate, updatePaciente);
 
 export default router;
