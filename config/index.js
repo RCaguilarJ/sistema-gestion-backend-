@@ -12,7 +12,7 @@ import consultaRoutes from "./routes/consultaRoutes.js"; // <--- NUEVA
 import citaRoutes from "./routes/citaRoutes.js";
 
 const app = express();
-const PORT = process.env.PORT || 4000; // Usa el puerto del entorno o 4000
+const PORT = process.env.PORT || 3000; // Usa el puerto del entorno o 4000
 
 // Configuración de CORS (asumiendo que usas dotenv para CORS_ORIGIN)
 const corsOrigin = process.env.CORS_ORIGIN || "http://localhost:5173";

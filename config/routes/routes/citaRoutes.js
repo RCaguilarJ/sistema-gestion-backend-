@@ -1,12 +1,12 @@
 // routes/citaRoutes.js
 import { Router } from 'express';
 // --- CORRECCIÓN: Usamos 'authenticate' ---
-import { authenticate } from '../middleware/authMiddleware.js'; 
+import { authenticate } from '../../middleware/authMiddleware.js'; 
 import {
   getCitasByPacienteId,
   createCita,
   updateCitaEstado,
-} from '../controllers/citaController.js';
+} from '../../controllers/citaController.js';
 
 const router = Router();
 

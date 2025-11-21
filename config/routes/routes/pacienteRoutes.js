@@ -1,13 +1,13 @@
 // routes/pacienteRoutes.js
 import { Router } from 'express';
 // Usamos 'authenticate', que es el nombre correcto de la función en tu middleware/authMiddleware.js
-import { authenticate } from '../middleware/authMiddleware.js'; 
+import { authenticate } from '../../middleware/authMiddleware.js'; 
 import {
   getAllPacientes,
   createPaciente,
   getPaciente,       // Función para GET /:id
   updatePaciente,    // Función para PUT /:id
-} from '../controllers/pacienteController.js'; 
+} from '../../controllers/pacienteController.js'; 
 
 const router = Router();
 

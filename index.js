@@ -1,6 +1,9 @@
 import express from "express";
 import cors from "cors";
 import db from "./config/database.js";
+import consultaRoutes from "./routes/consultaRoutes.js";
+
+
 
 // --- 1. Importar Modelos ---
 import User from "./models/User.js";
@@ -28,11 +31,15 @@ app.use('/api/nutricion', nutricionRoutes);
 
 app.use('/api/documentos', documentosRoutes);
 
+
 // --- 3. Conectar las Rutas ---
 app.use("/api/auth", authRoutes);
 app.use("/api/pacientes", pacienteRoutes);
 // ¡NUEVO! Conectamos la ruta para que el frontend pueda pedir la lista
 app.use("/api/users", userRoutes);
+app.use("/api/consultas", consultaRoutes);
+
+
 
 // Ruta base de prueba
 app.get("/api", (req, res) => {
@@ -45,10 +52,10 @@ const startServer = async () => {
     await db.authenticate();
     console.log("✅ Conexión a la base de datos establecida.");
 
-    // Sincronizar modelos sin forzar borrados: usa `alter` para aplicar cambios
-    // sin intentar dropear tablas que puedan tener FK (más seguro en BD con datos).
-    await db.sync({ alter: true });
-    console.log("✅ Modelos sincronizados con la base de datos (alter: true).");
+    // Sincronizar modelos sin forzar cambios automáticos para evitar que MySQL
+    // acumule índices duplicados en cada arranque.
+    await db.sync();
+    console.log("✅ Modelos sincronizados con la base de datos.");
 
     // Crear usuarios y pacientes de prueba solo si la tabla de usuarios está vacía
     const userCount = await User.count();

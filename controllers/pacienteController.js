@@ -109,6 +109,15 @@ export const createPaciente = async (req, res) => {
       return res.status(400).json({ message: 'Validation error', details: errors });
     }
 
+    // Evitar errores de constraint devolviendo un mensaje claro si el CURP ya existe
+    const existingCurp = await Paciente.findOne({ where: { curp: payload.curp } });
+    if (existingCurp) {
+      return res.status(409).json({
+        message: 'Ya existe un paciente registrado con este CURP.',
+        field: 'curp',
+      });
+    }
+
     const nuevoPaciente = await Paciente.create(payload);
     res.status(201).json(nuevoPaciente);
   } catch (error) {
@@ -120,7 +129,14 @@ export const createPaciente = async (req, res) => {
     }
 
     if (error.name === 'SequelizeUniqueConstraintError') {
-      const details = error.errors.map((e) => e.message);
+      const curpError = error.errors?.find((e) => e.path === 'curp');
+      if (curpError) {
+        return res.status(409).json({
+          message: 'Ya existe un paciente registrado con este CURP.',
+          field: 'curp',
+        });
+      }
+      const details = error.errors?.map((e) => e.message) || ['Constraint error'];
       return res.status(409).json({ message: 'Constraint error', details });
     }
 
@@ -166,6 +182,16 @@ export const updatePaciente = async (req, res) => {
       return res.status(404).json({ message: 'Paciente no encontrado para actualizar o acceso denegado.' });
     }
 
+    if (payload.curp) {
+      const curpOwner = await Paciente.findOne({ where: { curp: payload.curp } });
+      if (curpOwner && curpOwner.id !== Number(id)) {
+        return res.status(409).json({
+          message: 'Ya existe otro paciente registrado con este CURP.',
+          field: 'curp',
+        });
+      }
+    }
+
     await Paciente.update(payload, { where: whereClause });
     const freshPaciente = await Paciente.findByPk(id);
     res.status(200).json(freshPaciente);
@@ -173,7 +199,14 @@ export const updatePaciente = async (req, res) => {
     console.error('Error al actualizar paciente:', error);
 
     if (error.name === 'SequelizeUniqueConstraintError') {
-      const details = error.errors.map((e) => e.message);
+      const curpError = error.errors?.find((e) => e.path === 'curp');
+      if (curpError) {
+        return res.status(409).json({
+          message: 'Ya existe otro paciente registrado con este CURP.',
+          field: 'curp',
+        });
+      }
+      const details = error.errors?.map((e) => e.message) || ['Constraint error'];
       return res.status(409).json({ message: 'Constraint error', details });
     }
 

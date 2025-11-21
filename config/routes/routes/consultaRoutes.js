@@ -1,12 +1,12 @@
 // routes/consultaRoutes.js
 import { Router } from 'express';
 // --- CORRECCIÓN: El módulo exporta 'authenticate', no 'authenticateToken' ---
-import { authenticate } from '../middleware/authMiddleware.js'; 
+import { authenticate } from '../../middleware/authMiddleware.js'; 
 import {
   getConsultasByPacienteId,
   createConsulta,
   getConsultaById,
-} from '../controllers/consultaController.js'; 
+} from '../../controllers/consultaController.js'; 
 
 const router = Router();
 
