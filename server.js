@@ -16,7 +16,7 @@ import citaRoutes from './src/routes/citaRoutes.js';
 import userRoutes from './src/routes/userRoutes.js';
 import nutricionRoutes from './src/routes/nutricionRoutes.js';
 import documentosRoutes from './src/routes/documentosRoutes.js';
-import dashboardRoutes from './src/routes/dashboardRoutes.js'; // Si creamos este antes
+import dashboardRoutes from './src/routes/dashboardRoutes.js'; 
 
 dotenv.config();
 
@@ -45,13 +45,12 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(uploadDir));
 
 // --- CONEXIÓN ÚNICA MYSQL ---
-// 'alter: true' es IMPORTANTE aquí para que cree las tablas nuevas
-// (documentos, nutricion_info, planes_alimentacion) automáticamente.
+// 'alter: true' es IMPORTANTE aquí para que cree las tablas nuevas automáticamente.
 db.sequelize.sync({ alter: true }) 
   .then(() => console.log('✅ Sistema DB (MySQL) 100% Sincronizado'))
   .catch(err => console.error('❌ Error MySQL:', err));
 
-// Rutas
+// Rutas de la API
 app.use('/api/auth', authRoutes);
 app.use('/api/pacientes', pacienteRoutes);
 app.use('/api/consultas', consultaRoutes);
@@ -60,6 +59,24 @@ app.use('/api/users', userRoutes);
 app.use('/api/nutricion', nutricionRoutes);
 app.use('/api/documentos', documentosRoutes);
 app.use('/api/dashboard', dashboardRoutes); 
+
+// --------------------------------------------------------------------------
+// --- SECCIÓN PARA PRODUCCIÓN (Descomentar SOLO al subir al servidor) ---
+// --------------------------------------------------------------------------
+
+/* PASO 1: Asegúrate de haber copiado la carpeta 'dist' del frontend 
+           a la raíz de este backend.
+   
+   PASO 2: Descomenta las siguientes líneas para que Node.js sirva la página web:
+*/
+
+// app.use(express.static(path.join(__dirname, 'dist')));
+
+// app.get('*', (req, res) => {
+//   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+// });
+
+// --------------------------------------------------------------------------
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
