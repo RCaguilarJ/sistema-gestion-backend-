@@ -31,7 +31,7 @@ if (!fs.existsSync(uploadDir)) {
 }
 
 // CORS
-const whitelist = [process.env.FRONTEND_URL || 'http://localhost:5173'];
+const whitelist = [process.env.FRONTEND_URL || 'https://back.diabetesjalisco.org/'];
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin || whitelist.includes(origin)) callback(null, true);
@@ -80,5 +80,5 @@ app.use('/api/dashboard', dashboardRoutes);
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
-  console.log(`🚀 Servidor corriendo (Solo SQL) en http://localhost:${PORT}`);
+  console.log('🚀 Servidor corriendo (Solo SQL) en https://back.diabetesjalisco.org/');
 });
