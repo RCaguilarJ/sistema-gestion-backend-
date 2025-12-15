@@ -17,6 +17,7 @@ import userRoutes from './src/routes/userRoutes.js';
 import nutricionRoutes from './src/routes/nutricionRoutes.js';
 import documentosRoutes from './src/routes/documentosRoutes.js';
 import dashboardRoutes from './src/routes/dashboardRoutes.js'; 
+import { BASE_URL } from './src/utils/url.js';
 
 dotenv.config();
 
@@ -31,10 +32,19 @@ if (!fs.existsSync(uploadDir)) {
 }
 
 // CORS
-const whitelist = [process.env.FRONTEND_URL || 'https://back.diabetesjalisco.org/'];
+const normalizeOrigin = (origin) => origin ? origin.replace(/\/+$/, '') : origin;
+const whitelist = Array.from(
+  new Set(
+    [process.env.FRONTEND_URL, process.env.APP_URL, BASE_URL]
+      .filter(Boolean)
+      .map(normalizeOrigin)
+  )
+);
+
 app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || whitelist.includes(origin)) callback(null, true);
+  origin(origin, callback) {
+    const normalizedOrigin = normalizeOrigin(origin);
+    if (!origin || whitelist.includes(normalizedOrigin)) callback(null, true);
     else callback(new Error('Bloqueado por CORS'));
   },
   credentials: true
@@ -80,5 +90,5 @@ app.use('/api/dashboard', dashboardRoutes);
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
-  console.log('🚀 Servidor corriendo (Solo SQL) en https://back.diabetesjalisco.org/');
+  console.log(`🚀 Servidor corriendo (Solo SQL) en ${BASE_URL}`);
 });
