@@ -47,7 +47,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(uploadDir));
 
 // --- CONEXIÓN BASE DE DATOS ---
-db.sequelize.sync({ alter: true }) 
+db.sequelize.sync()
   .then(() => console.log('✅ Sistema DB (MySQL) 100% Sincronizado'))
   .catch(err => console.error('❌ Error MySQL:', err));
 
