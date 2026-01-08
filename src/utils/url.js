@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const DEFAULT_BASE_URL = 'https://back.diabetesjalisco.org';
+const DEFAULT_BASE_URL = 'localhost:4000';
 
 const sanitizeBaseUrl = (value = DEFAULT_BASE_URL) => {
   if (!value) return DEFAULT_BASE_URL;

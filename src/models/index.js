@@ -3,8 +3,12 @@ import { Sequelize } from "sequelize";
 import sequelize from "../config/database.js"; 
 
 // --- 1. MODELOS ACTIVOS ---
-import User from "./User.js";
+import UserFactory from "./User.js";
 import Paciente from "./Paciente.js";
+import Cita from "./Cita.js";
+
+// Initialize User model (since it's a factory function)
+const User = UserFactory(sequelize);
 
 // --- 2. RELACIONES ---
 User.hasMany(Paciente, { foreignKey: "nutriologoId", as: "PacientesAsignados" });
@@ -15,7 +19,8 @@ const db = {
   sequelize,
   Sequelize,
   User,
-  Paciente
+  Paciente,
+  Cita
 };
 
 export default db;

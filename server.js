@@ -15,11 +15,11 @@ import userRoutes from './src/routes/userRoutes.js';
 
 // --- RUTAS PENDIENTES (Descomentar cuando crees los archivos en src/routes) ---
 // Si los dejas activos sin tener los archivos, el servidor explota.
-// import consultaRoutes from './src/routes/consultaRoutes.js';
-// import citaRoutes from './src/routes/citaRoutes.js';
-// import nutricionRoutes from './src/routes/nutricionRoutes.js';
-// import documentosRoutes from './src/routes/documentosRoutes.js';
-// import dashboardRoutes from './src/routes/dashboardRoutes.js'; 
+import consultaRoutes from './src/routes/consultaRoutes.js';
+import citaRoutes from './src/routes/citaRoutes.js';
+import nutricionRoutes from './src/routes/nutricionRoutes.js';
+import documentosRoutes from './src/routes/documentosRoutes.js';
+import dashboardRoutes from './src/routes/dashboardRoutes.js'; 
 
 import { BASE_URL } from './src/utils/url.js';
 
@@ -35,11 +35,19 @@ if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir);
 }
 
-// --- CORS SIMPLIFICADO PARA DESARROLLO ---
-// Esto garantiza que tu frontend local pueda entrar sin pelear con variables de entorno
+// --- CORS CONFIGURADO PARA MÚLTIPLES PUERTOS ---
+// Permite acceso desde diferentes puertos de desarrollo de Vite
 app.use(cors({
-  origin: 'http://localhost:5173', 
-  credentials: true
+  origin: [
+    'http://localhost:5173', // Puerto por defecto de Vite
+    'http://localhost:5174', // Puerto alternativo de Vite
+    'http://localhost:3000', // Puerto alternativo
+    'http://127.0.0.1:5173',
+    'http://127.0.0.1:5174'
+  ], 
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
@@ -57,11 +65,19 @@ app.use('/api/pacientes', pacienteRoutes);
 app.use('/api/users', userRoutes);
 
 // Descomentar estas líneas cuando descomentes los imports de arriba
-// app.use('/api/consultas', consultaRoutes);
-// app.use('/api/citas', citaRoutes);
-// app.use('/api/nutricion', nutricionRoutes);
-// app.use('/api/documentos', documentosRoutes);
-// app.use('/api/dashboard', dashboardRoutes); 
+app.use('/api/consultas', consultaRoutes);
+app.use('/api/citas', citaRoutes);
+app.use('/api/nutricion', nutricionRoutes);
+app.use('/api/documentos', documentosRoutes);
+app.use('/api/dashboard', dashboardRoutes); 
+
+// Servir archivos estáticos del build de producción
+app.use(express.static(path.join(__dirname, 'dist')));
+
+// Ruta catch-all que devuelve index.html para todas las rutas no API
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {

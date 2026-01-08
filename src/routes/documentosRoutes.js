@@ -3,6 +3,7 @@ import multer from 'multer';
 import path from 'path';
 // CORRECCIÓN: ../ en lugar de ../../
 import { authenticate } from '../middleware/authMiddleware.js';
+import { authorizeRoles } from '../middleware/authMiddleware.js';
 import { getDocumentos, uploadDocumento, deleteDocumento } from '../controllers/documentosController.js';
 
 const storage = multer.diskStorage({
@@ -18,7 +19,7 @@ const upload = multer({ storage });
 const router = Router();
 
 router.get('/:pacienteId', authenticate, getDocumentos);
-router.post('/upload', authenticate, upload.single('archivo'), uploadDocumento);
-router.delete('/:id', authenticate, deleteDocumento);
+router.post('/upload', authenticate, authorizeRoles('ADMIN'), upload.single('archivo'), uploadDocumento);
+router.delete('/:id', authenticate, authorizeRoles('ADMIN'), deleteDocumento);
 
 export default router;
