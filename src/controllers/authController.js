@@ -3,6 +3,17 @@ import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
+const allowedRoles = [
+    "ADMIN",
+    "DOCTOR",
+    "NUTRI",
+    "PSY",
+    "PATIENT",
+    "ENDOCRINOLOGO",
+    "PODOLOGO",
+    "PSICOLOGO"
+];
+
 const JWT_SECRET = process.env.JWT_SECRET || "secreto_temporal";
 
 export const register = async (req, res) => {
@@ -10,21 +21,26 @@ export const register = async (req, res) => {
     // Copia el contenido lógico que tenías, pero asegúrate de que el import sea "../models/User.js"
     try {
         const { nombre, username, email, password, role } = req.body;
-        // ... resto del código ...
-        // Para ahorrar espacio, asumo que copias el cuerpo de la función que ya tenías.
-        // Lo único CRÍTICO es la primera línea: import User from "../models/User.js";
-        
-        // Te pongo el bloque mínimo para que funcione si copias y pegas:
+
         if (!nombre || !username || !email || !password) return res.status(400).json({message: "Faltan datos"});
         const emailTrim = email.trim().toLowerCase();
+        const usernameTrim = username.trim();
+
         if (await User.findOne({ where: { email: emailTrim } })) return res.status(409).json({ message: "Email registrado" });
-        
+        if (await User.findOne({ where: { username: usernameTrim } })) return res.status(409).json({ message: "Username registrado" });
+
+        const normalizedRole = role && allowedRoles.includes(role) ? role : "DOCTOR";
+
         const newUser = await User.create({ 
-            nombre, username, email: emailTrim, password, role: role || "DOCTOR" 
+            nombre, username: usernameTrim, email: emailTrim, password, role: normalizedRole 
         });
         const token = jwt.sign({ id: newUser.id, role: newUser.role }, JWT_SECRET, { expiresIn: "24h" });
         res.status(201).json({ token, user: newUser });
     } catch (error) {
+        if (error.name === 'SequelizeUniqueConstraintError') {
+            const field = error?.errors?.[0]?.path || 'dato';
+            return res.status(409).json({ message: `El ${field} ya está en uso.` });
+        }
         res.status(500).json({ message: error.message });
     }
 };

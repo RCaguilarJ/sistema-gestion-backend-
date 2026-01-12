@@ -17,6 +17,7 @@ import userRoutes from './src/routes/userRoutes.js';
 import nutricionRoutes from './src/routes/nutricionRoutes.js';
 import documentosRoutes from './src/routes/documentosRoutes.js';
 import dashboardRoutes from './src/routes/dashboardRoutes.js'; 
+import amdSyncRoutes from './src/routes/amdSyncRoutes.js';
 
 dotenv.config();
 
@@ -31,7 +32,11 @@ if (!fs.existsSync(uploadDir)) {
 }
 
 // CORS
-const whitelist = [process.env.FRONTEND_URL || 'http://localhost:5173'];
+const whitelistEnv = process.env.FRONTEND_URLS || process.env.FRONTEND_URL || 'http://localhost:5174';
+const whitelist = whitelistEnv
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin || whitelist.includes(origin)) callback(null, true);
@@ -40,7 +45,13 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(express.json());
+app.use(express.json({
+  verify: (req, res, buf) => {
+    if (buf?.length) {
+      req.rawBody = buf.toString();
+    }
+  }
+}));
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(uploadDir));
 
@@ -59,24 +70,9 @@ app.use('/api/users', userRoutes);
 app.use('/api/nutricion', nutricionRoutes);
 app.use('/api/documentos', documentosRoutes);
 app.use('/api/dashboard', dashboardRoutes); 
+app.use('/api/sync/amd', amdSyncRoutes);
 
-// --------------------------------------------------------------------------
-// --- SECCIÓN PARA PRODUCCIÓN (Descomentar SOLO al subir al servidor) ---
-// --------------------------------------------------------------------------
 
-/* PASO 1: Asegúrate de haber copiado la carpeta 'dist' del frontend 
-           a la raíz de este backend.
-   
-   PASO 2: Descomenta las siguientes líneas para que Node.js sirva la página web:
-*/
-
-// app.use(express.static(path.join(__dirname, 'dist')));
-
-// app.get('*', (req, res) => {
-//   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-// });
-
-// --------------------------------------------------------------------------
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {

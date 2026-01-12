@@ -1,4 +1,5 @@
 import Paciente from '../models/Paciente.js';
+import { sendPacienteToAmd } from '../services/amdClient.js';
 
 // Listas de valores permitidos para validación
 const allowedGeneros = ['Masculino', 'Femenino', 'Otro'];
@@ -156,6 +157,10 @@ export const createPaciente = async (req, res) => {
     }
 
     const nuevoPaciente = await Paciente.create(payload);
+
+    sendPacienteToAmd(nuevoPaciente.toJSON())
+      .catch((syncError) => console.error('Error sincronizando paciente con AMD:', syncError.message));
+
     res.status(201).json(nuevoPaciente);
   } catch (error) {
     console.error("Error createPaciente:", error);
@@ -227,6 +232,9 @@ export const updatePaciente = async (req, res) => {
     }
 
     await paciente.update(payload);
+
+    sendPacienteToAmd(paciente.toJSON())
+      .catch((syncError) => console.error('Error sincronizando actualización AMD:', syncError.message));
     
     // Devolver el objeto actualizado
     res.json(paciente);
@@ -235,3 +243,5 @@ export const updatePaciente = async (req, res) => {
     res.status(500).json({ message: 'Error al actualizar', error: error.message });
   }
 };
+
+export { normalizePacientePayload };
