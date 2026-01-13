@@ -41,9 +41,9 @@ src/
 ## Database Patterns (Sequelize ORM)
 
 ### Model Definition
-- Use factory functions for models that export a function accepting `sequelize`
+- Use factory functions for models that export a function accepting `sequelize` (recommended for complex models)
 - Define models directly for simpler models that import sequelize
-- Always specify `tableName` explicitly
+- Always specify `tableName` explicitly (recommended best practice)
 - Include `timestamps: true` for models with createdAt/updatedAt fields
 
 Example factory pattern (User model):
@@ -59,7 +59,7 @@ export default (sequelize) => {
 };
 ```
 
-Example direct definition (Paciente model):
+Example direct definition (recommended pattern):
 ```javascript
 const Paciente = sequelize.define('Paciente', {
   // ... fields
