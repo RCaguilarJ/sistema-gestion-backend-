@@ -16,7 +16,7 @@ export const register = async (req, res) => {
         
         const emailTrim = email.trim().toLowerCase();
         // Si no hay username, usar el email
-        const usernameTrim = username ? username.trim() : emailTrim;
+        const usernameTrim = username?.trim() || emailTrim;
 
         if (await User.findOne({ where: { email: emailTrim } })) {
             return res.status(409).json({ message: "Email registrado" });
@@ -60,9 +60,9 @@ export const register = async (req, res) => {
             return res.status(409).json({ message: `El ${field} ya está en uso.` });
         }
         if (error.name === 'SequelizeValidationError') {
-            return res.status(400).json({ message: "Error de validación", error: error.message });
+            return res.status(400).json({ message: "Error de validación" });
         }
-        res.status(500).json({ message: "Error al registrar", error: error.message });
+        res.status(500).json({ message: "Error al registrar" });
     }
 };
 
