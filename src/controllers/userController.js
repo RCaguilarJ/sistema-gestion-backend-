@@ -1,6 +1,58 @@
 import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 
+// Crear nuevo usuario (Solo ADMIN)
+export const createUser = async (req, res) => {
+  try {
+    const { nombre, username, email, role, password } = req.body;
+
+    // Validaciones básicas
+    if (!nombre || !email || !password) {
+      return res.status(400).json({ message: "Faltan campos requeridos: nombre, email, password" });
+    }
+
+    // Verificar si el email ya existe
+    const existingUser = await User.findOne({ where: { email } });
+    if (existingUser) {
+      return res.status(409).json({ message: "El email ya está registrado" });
+    }
+
+    // Verificar username si se proporciona
+    if (username) {
+      const existingUsername = await User.findOne({ where: { username } });
+      if (existingUsername) {
+        return res.status(409).json({ message: "El nombre de usuario ya existe" });
+      }
+    }
+
+    // Hashear la contraseña
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Crear el usuario
+    const newUser = await User.create({
+      nombre,
+      username: username || email, // Si no hay username, usar email
+      email,
+      password: hashedPassword,
+      role: role || 'Paciente', // Rol por defecto
+      estatus: 'Activo'
+    });
+
+    // Retornar sin contraseña
+    const { password: _, ...userWithoutPassword } = newUser.toJSON();
+    
+    res.status(201).json({ 
+      message: "Usuario creado exitosamente", 
+      user: userWithoutPassword 
+    });
+
+  } catch (error) {
+    console.error("Error al crear usuario:", error);
+    res.status(500).json({ message: "Error al crear usuario", error: error.message });
+  }
+};
+
 // Obtener todos los usuarios
 export const getAllUsers = async (req, res) => {
   try {

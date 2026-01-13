@@ -1,6 +1,7 @@
 import { Router } from 'express';
 // CORRECCIÓN: ../middleware y ../controllers
 import { authenticate } from '../middleware/authMiddleware.js'; 
+import { authorizeRoles } from '../middleware/authMiddleware.js';
 import {
   getAllPacientes,
   createPaciente,
@@ -11,8 +12,8 @@ import {
 const router = Router();
 
 router.get('/', authenticate, getAllPacientes);
-router.post('/', authenticate, createPaciente);
+router.post('/', authenticate, authorizeRoles('ADMIN'), createPaciente);
 router.get('/:id', authenticate, getPaciente); 
-router.put('/:id', authenticate, updatePaciente);
+router.put('/:id', authenticate, authorizeRoles('ADMIN'), updatePaciente);
 
 export default router;

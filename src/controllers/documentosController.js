@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import db from '../models/index.js'; // Usamos db global
+import { buildPublicUrl } from '../utils/url.js';
 const { Documento } = db;
 
 const __filename = fileURLToPath(import.meta.url);
@@ -14,7 +15,16 @@ export const getDocumentos = async (req, res) => {
             where: { pacienteId },
             order: [['createdAt', 'DESC']]
         });
-        res.json(docs);
+        const response = docs.map((doc) => {
+            const plain = doc.toJSON();
+            if (plain.url) {
+                plain.url = plain.url.startsWith('http')
+                    ? plain.url
+                    : buildPublicUrl(plain.url);
+            }
+            return plain;
+        });
+        res.json(response);
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Error al obtener documentos' });
@@ -28,7 +38,7 @@ export const uploadDocumento = async (req, res) => {
 
         if (!file) return res.status(400).json({ error: 'No hay archivo' });
 
-        const url = `/uploads/${file.filename}`;
+        const relativeUrl = `/uploads/${file.filename}`;
 
         const documento = await Documento.create({
             pacienteId: parseInt(pacienteId),
@@ -36,10 +46,12 @@ export const uploadDocumento = async (req, res) => {
             categoria: categoria || 'General',
             cargadoPor: cargadoPor || 'Sistema',
             tamano: file.size,
-            url
+            url: relativeUrl
         });
 
-        res.json(documento);
+        const payload = documento.toJSON();
+        payload.url = buildPublicUrl(relativeUrl);
+        res.json(payload);
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Error al guardar en BD' });

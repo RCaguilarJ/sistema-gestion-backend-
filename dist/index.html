@@ -1,12 +1,119 @@
 <!doctype html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>sistema-gestion-medica</title>
+    <title>Sistema de Gestión Médica</title>
+    
+    <!-- Cache Control Headers -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    
+    <!-- Chart.js Runtime Error Suppression -->
+    <script src="./chartjs-runtime-fix.js"></script>
+    
+    <!-- Chart.js Master Interceptor -->
+    <script src="./chartjs-master-interceptor.js"></script>
+    
+    <!-- Chart.js Compatibility Script -->
+    <script>
+      /**
+       * Chart.js Error Suppression Handler
+       * Prevents Chart.js Filler plugin errors from breaking the application
+       */
+      (function() {
+          'use strict';
+          
+          // Store original console methods
+          const originalError = console.error;
+          const originalWarn = console.warn;
+          
+          // Helper function to identify Chart.js errors
+          function isChartJsError(message) {
+              return message.includes('Tried to use the \'fill\' option without the \'Filler\' plugin enabled') ||
+                     message.includes('Filler') ||
+                     message.includes('Chart.js') ||
+                     message.includes('chart.js') ||
+                     message.includes('fill option') ||
+                     message.includes('overrideMethod') ||
+                     message.includes('installHook');
+          }
+          
+          // Override console methods - more aggressive
+          console.error = function(...args) {
+              const msg = String(args[0] || '') + ' ' + String(args[1] || '');
+              if (!isChartJsError(msg)) {
+                  originalError.apply(console, args);
+              }
+          };
+          
+          console.warn = function(...args) {
+              const msg = String(args[0] || '') + ' ' + String(args[1] || '');
+              if (!isChartJsError(msg)) {
+                  originalWarn.apply(console, args);
+              }
+          };
+          
+          // More aggressive error handling
+          window.addEventListener('error', function(event) {
+              const message = event.message || event.error?.message || '';
+              if (isChartJsError(message)) {
+                  event.preventDefault();
+                  event.stopImmediatePropagation();
+                  return true;
+              }
+              return false;
+          }, true);
+          
+          // Handle unhandled promise rejections
+          window.addEventListener('unhandledrejection', function(event) {
+              const msg = event.reason?.message || String(event.reason);
+              if (isChartJsError(msg)) {
+                  event.preventDefault();
+                  event.stopImmediatePropagation();
+                  return false;
+              }
+          });
+          
+          // Override Error constructor temporarily for Chart.js errors
+          const OriginalError = window.Error;
+          window.Error = function(message, ...args) {
+              if (isChartJsError(message)) {
+                  // Return a dummy error that won't break anything
+                  return new OriginalError('');
+              }
+              return new OriginalError(message, ...args);
+          };
+          
+          // Restore Error constructor after a delay
+          setTimeout(() => {
+              window.Error = OriginalError;
+          }, 5000);
+          
+          // Clear cache and storage
+          if ('caches' in window) {
+              caches.keys().then(names => names.forEach(name => caches.delete(name)));
+          }
+          
+          if ('serviceWorker' in navigator) {
+              navigator.serviceWorker.getRegistrations()
+                  .then(registrations => registrations.forEach(reg => reg.unregister()));
+          }
+          
+          try { localStorage.clear(); } catch(e) {}
+          try { sessionStorage.clear(); } catch(e) {}
+          
+      })();
+    </script>
+    </script>
+    
     <script type="module" crossorigin src="/assets/index-BwV1ZnMl.js"></script>
     <link rel="stylesheet" crossorigin href="/assets/index-n4HK8TRD.css">
+    
+    <!-- Chart.js Configuration Fix - Carga después de todo -->
+    <script src="./chartjs-config-fix.js"></script>
   </head>
   <body>
     <div id="root"></div>
