@@ -157,7 +157,8 @@ Required environment variables (defined in `.env`):
 - `npm run setup:db` - Setup database
 
 ### Database Timezone
-- Configured for Central Time (GMT-6): `timezone: '-06:00'`
+- Configured for Central Time with fixed offset (GMT-6): `timezone: '-06:00'`
+- Note: This uses a fixed offset and does not automatically adjust for daylight saving time
 - Database logging is disabled: `logging: false`
 
 ### File Uploads
@@ -212,12 +213,17 @@ const pacientes = await Paciente.findAll({
 
 ## Testing
 - No formal testing framework is currently configured
-- Manual testing is performed through API endpoints
-- Consider the existing patterns when adding test infrastructure
+- Manual testing is performed through API endpoints using tools like Postman or curl
+- When adding test infrastructure, consider Jest or Mocha as they are popular in the Node.js ecosystem
+- For new features, test manually by:
+  - Making API requests to verify responses and status codes
+  - Checking database state after operations
+  - Testing authentication and authorization flows
+  - Validating error handling with invalid inputs
 
 ## Code Quality
-- Avoid adding comments unless necessary for complex logic
+- Avoid adding comments unless necessary for complex logic (e.g., non-obvious algorithms, business rule explanations, or workarounds)
 - Keep functions focused and single-purpose
-- Use meaningful variable names in Spanish for domain concepts
+- Use meaningful variable names in Spanish for domain concepts (e.g., `paciente`, `consulta`, `nutriologo`, `fechaNacimiento`)
 - Handle edge cases and null values appropriately
 - Always validate required fields before database operations
