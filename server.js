@@ -20,6 +20,8 @@ import citaRoutes from './src/routes/citaRoutes.js';
 import nutricionRoutes from './src/routes/nutricionRoutes.js';
 import documentosRoutes from './src/routes/documentosRoutes.js';
 import dashboardRoutes from './src/routes/dashboardRoutes.js'; 
+import amdSyncRoutes from './src/routes/amdSyncRoutes.js';
+import notificationRoutes from './src/routes/notificationRoutes.js';
 
 import { BASE_URL } from './src/utils/url.js';
 
@@ -34,6 +36,7 @@ const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir);
 }
+
 
 // --- CORS CONFIGURADO PARA MÚLTIPLES PUERTOS ---
 // Permite acceso desde diferentes puertos de desarrollo de Vite
@@ -50,7 +53,13 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-app.use(express.json());
+app.use(express.json({
+  verify: (req, res, buf) => {
+    if (buf?.length) {
+      req.rawBody = buf.toString();
+    }
+  }
+}));
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(uploadDir));
 
@@ -70,14 +79,8 @@ app.use('/api/citas', citaRoutes);
 app.use('/api/nutricion', nutricionRoutes);
 app.use('/api/documentos', documentosRoutes);
 app.use('/api/dashboard', dashboardRoutes); 
-
-// Servir archivos estáticos del build de producción
-app.use(express.static(path.join(__dirname, 'dist')));
-
-// Ruta catch-all que devuelve index.html para todas las rutas no API
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-});
+app.use('/api/sync/amd', amdSyncRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {

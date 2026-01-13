@@ -26,9 +26,9 @@ export default (sequelize) => {
       allowNull: false
     },
     role: {
-      type: DataTypes.ENUM('Administrador', 'Doctor', 'Nutriólogo', 'Psicólogo', 'Paciente'),
+      type: DataTypes.ENUM('ADMIN', 'DOCTOR', 'NUTRI', 'PSY', 'PATIENT', 'ENDOCRINOLOGO', 'PODOLOGO', 'PSICOLOGO'),
       allowNull: false,
-      defaultValue: 'Paciente'
+      defaultValue: 'PATIENT'
     },
     estatus: {
       type: DataTypes.ENUM('Activo', 'Inactivo'),
