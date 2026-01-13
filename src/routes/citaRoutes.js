@@ -1,5 +1,4 @@
 import { Router } from 'express';
-// CORRECCIÓN: ../middleware y ../controllers
 import { authenticate } from '../middleware/authMiddleware.js'; 
 import { authorizeRoles } from '../middleware/authMiddleware.js';
 import {
@@ -7,18 +6,28 @@ import {
   createCita,
   updateCitaEstado,
   getPendingCitasForMedico,
+  getMisCitas,
+  getTodasLasCitas
 } from '../controllers/citaController.js';
 
 const router = Router();
 
+// Pacientes: Ver sus propias citas
 router.get('/paciente/:pacienteId', authenticate, getCitasByPacienteId); 
-<<<<<<< HEAD
+
+// Pacientes: Agendar nueva cita (sin restricción)
 router.post('/paciente/:pacienteId', authenticate, createCita); 
-router.put('/:id/estado', authenticate, updateCitaEstado); 
+
+// Médicos: Ver solo SUS citas pendientes
 router.get('/pendientes/mias', authenticate, getPendingCitasForMedico);
-=======
-router.post('/paciente/:pacienteId', authenticate, authorizeRoles('ADMIN'), createCita); 
-router.put('/:id/estado', authenticate, authorizeRoles('ADMIN'), updateCitaEstado); 
->>>>>>> 7b3ff6ba8231b0ba67ff0482d876ff4cec9cc648
+
+// Médicos: Ver TODAS sus citas (pasadas y futuras)
+router.get('/mis-citas', authenticate, getMisCitas);
+
+// Médicos: Actualizar estado de citas
+router.put('/:id/estado', authenticate, updateCitaEstado); 
+
+// ADMIN: Ver TODAS las citas del sistema
+router.get('/todas', authenticate, authorizeRoles('ADMIN'), getTodasLasCitas);
 
 export default router;
