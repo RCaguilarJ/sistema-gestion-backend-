@@ -41,12 +41,12 @@ src/
 ## Database Patterns (Sequelize ORM)
 
 ### Model Definition
-- Use factory functions for models that export a function accepting `sequelize` (recommended for complex models)
-- Define models directly for simpler models that import sequelize
-- Always specify `tableName` explicitly (recommended best practice)
-- Include `timestamps: true` for models with createdAt/updatedAt fields
+- Use factory functions (models that export a function accepting `sequelize`) when the model needs to be initialized in a specific order or has complex initialization logic
+- Most models use direct definition pattern for simplicity
+- Specify `tableName` explicitly to control the exact table name (prevents Sequelize's auto-pluralization)
+- Include `timestamps: true` explicitly for clarity when the model uses createdAt/updatedAt fields (this is Sequelize's default behavior)
 
-Example factory pattern (User model):
+Example factory pattern (used by User model):
 ```javascript
 export default (sequelize) => {
   const User = sequelize.define('User', {
@@ -59,12 +59,12 @@ export default (sequelize) => {
 };
 ```
 
-Example direct definition (recommended pattern):
+Example direct definition (used by most models):
 ```javascript
 const Paciente = sequelize.define('Paciente', {
   // ... fields
 }, {
-  tableName: 'pacientes',
+  tableName: 'pacientes', // Specify to avoid auto-pluralization
   timestamps: true
 });
 export default Paciente;
