@@ -43,7 +43,7 @@ src/
 ### Model Definition
 - Use factory functions (models that export a function accepting `sequelize`) when the model needs to be initialized in a specific order or has complex initialization logic
 - Most models use direct definition pattern for simplicity
-- Specify `tableName` explicitly to control the exact table name (prevents Sequelize's auto-pluralization)
+- **Best Practice**: Specify `tableName` explicitly to control the exact table name and prevent Sequelize's auto-pluralization (some existing models may not follow this yet)
 - Include `timestamps: true` explicitly for clarity when the model uses createdAt/updatedAt fields (this is Sequelize's default behavior)
 
 Example factory pattern (used by User model):
@@ -59,16 +59,18 @@ export default (sequelize) => {
 };
 ```
 
-Example direct definition (used by most models):
+Example direct definition (standard pattern for new models):
 ```javascript
 const Paciente = sequelize.define('Paciente', {
   // ... fields
 }, {
-  tableName: 'pacientes', // Specify to avoid auto-pluralization
+  tableName: 'pacientes', // Recommended: specify to avoid auto-pluralization
   timestamps: true
 });
 export default Paciente;
 ```
+
+**Note**: Some existing models may omit `tableName`, relying on Sequelize's default pluralization. For new models, always specify it explicitly.
 
 ### Field Definitions
 - Use DataTypes from Sequelize: `DataTypes.STRING`, `DataTypes.INTEGER`, etc.
