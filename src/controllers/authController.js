@@ -55,6 +55,8 @@ export const register = async (req, res) => {
         });
     } catch (error) {
         console.error("Error en el registro:", error);
+        console.error("Error name:", error.name);
+        console.error("Error message:", error.message);
         if (error.name === 'SequelizeUniqueConstraintError') {
             const field = error?.errors?.[0]?.path || 'dato';
             return res.status(409).json({ message: `El ${field} ya está en uso.` });
