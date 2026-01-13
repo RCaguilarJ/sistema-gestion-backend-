@@ -1,5 +1,8 @@
 import Paciente from '../models/Paciente.js';
 import { sendPacienteToAmd } from '../services/amdClient.js';
+import db from '../models/index.js';
+import { Op } from 'sequelize';
+import { MEDICAL_ROLES } from '../constants/roles.js';
 
 // Listas de valores permitidos para validación
 const allowedGeneros = ['Masculino', 'Femenino', 'Otro'];
@@ -116,15 +119,34 @@ function normalizePacientePayload(body = {}, user = null, isUpdate = false) {
 
 /**
  * Obtener todos los pacientes.
- * Si es NUTRI, solo ve los suyos. Si es ADMIN/DOCTOR, ve todos.
+ * Si es NUTRI, solo ve los suyos asignados por nutriologoId. 
+ * Si es especialista médico (ENDOCRINOLOGO, PSICOLOGO, DOCTOR, etc.), solo ve pacientes con citas.
+ * Si es ADMIN/SUPER_ADMIN, ve todos.
  */
 export const getAllPacientes = async (req, res) => {
   try {
     const whereClause = {};
+    const { Cita } = db;
     
     // Filtro por rol: Nutriólogo solo ve sus pacientes asignados
     if (req.user && req.user.role === 'NUTRI') {
       whereClause.nutriologoId = req.user.id;
+    }
+    // Filtro para especialistas médicos: solo ven pacientes con citas
+    else if (req.user && MEDICAL_ROLES.includes(req.user.role) && req.user.role !== 'NUTRI') {
+      const citasPacientes = await Cita.findAll({
+        where: { medicoId: req.user.id },
+        attributes: ['pacienteId'],
+        raw: true
+      });
+      const pacienteIds = [...new Set(citasPacientes.map(c => c.pacienteId))];
+      
+      if (pacienteIds.length === 0) {
+        // Si el especialista no tiene citas aún, retornar array vacío
+        return res.status(200).json([]);
+      }
+      
+      whereClause.id = { [Op.in]: pacienteIds };
     }
 
     const pacientes = await Paciente.findAll({ 
