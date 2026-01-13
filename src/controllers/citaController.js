@@ -13,7 +13,7 @@ export const getCitasByPacienteId = async (req, res) => {
         const now = new Date();
         const whereBase = { pacienteId };
 
-        if (req.user && !['ADMIN'].includes(req.user.role)) {
+        if (req.user && !isAdmin(req.user.role)) {
             whereBase.medicoId = req.user.id;
         }
         

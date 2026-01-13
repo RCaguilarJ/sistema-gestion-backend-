@@ -25,11 +25,8 @@ export const authorizeRoles = (...roles) => {
       return res.status(403).json({ message: 'Usuario no autenticado.' });
     }
     
-    // Comparación case-insensitive para soportar 'admin', 'ADMIN', 'Admin', etc.
-    const userRole = (req.user.role || '').toLowerCase();
-    const allowedRoles = roles.map(r => r.toLowerCase());
-    
-    if (!allowedRoles.includes(userRole)) {
+    // Comparación exacta de roles
+    if (!roles.includes(req.user.role)) {
       return res.status(403).json({ 
         message: 'No tienes permisos para realizar esta acción.',
         userRole: req.user.role,
