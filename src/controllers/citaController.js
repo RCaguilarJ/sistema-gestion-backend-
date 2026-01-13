@@ -3,7 +3,11 @@ import db from '../models/index.js';
 import { sendCitaToAmd } from '../services/amdClient.js';
 
 // Destructuramos los modelos que necesitamos
-const { Cita, User } = db;
+const { Cita, User, Paciente } = db;
+
+// Constantes para roles
+const ROLES_ADMIN = ['ADMIN', 'SUPER_ADMIN'];
+const ROLES_MEDICOS = ['DOCTOR', 'NUTRI', 'ENDOCRINOLOGO', 'ENDOCRINO', 'PODOLOGO', 'PSICOLOGO'];
 
 // --- OBTENER CITAS DE UN PACIENTE ---
 export const getCitasByPacienteId = async (req, res) => {
@@ -13,9 +17,8 @@ export const getCitasByPacienteId = async (req, res) => {
         const whereBase = { pacienteId: parseInt(pacienteId) };
 
         // Si el usuario es un médico (no ADMIN), solo ver SUS citas
-        const rolesAdmin = ['ADMIN', 'SUPER_ADMIN'];
         if (req.user) {
-            if (!rolesAdmin.includes(req.user.role)) {
+            if (!ROLES_ADMIN.includes(req.user.role)) {
                 whereBase.medicoId = req.user.id;
                 console.log(`Médico ${req.user.id} consultando citas del paciente ${pacienteId}`);
             } else {
@@ -49,7 +52,7 @@ export const getCitasByPacienteId = async (req, res) => {
             success: true,
             proximasCitas, 
             historialCitas,
-            filtrado: !rolesAdmin.includes(req.user?.role) ? 'Por médico' : 'Todas'
+            filtrado: !ROLES_ADMIN.includes(req.user?.role) ? 'Por médico' : 'Todas'
         });
     } catch (error) {
         console.error('Error al obtener citas:', error);
@@ -92,8 +95,7 @@ export const getPendingCitasForMedico = async (req, res) => {
             return res.status(401).json({ message: 'No autenticado.' });
         }
 
-        const rolesPermitidos = ['DOCTOR', 'NUTRI', 'PSY', 'ENDOCRINOLOGO', 'PODOLOGO', 'PSICOLOGO'];
-        if (!rolesPermitidos.includes(req.user.role)) {
+        if (!ROLES_MEDICOS.includes(req.user.role)) {
             return res.status(403).json({ message: 'Rol sin acceso a pendientes.' });
         }
 
@@ -120,9 +122,7 @@ export const getMisCitas = async (req, res) => {
     const usuarioLogueado = req.user;
     
     // Validar que sea un médico/especialista
-    const rolesPermitidos = ['DOCTOR', 'NUTRI', 'ENDOCRINOLOGO', 'ENDOCRINO', 'PODOLOGO', 'PSICOLOGO'];
-    
-    if (!rolesPermitidos.includes(usuarioLogueado.role)) {
+    if (!ROLES_MEDICOS.includes(usuarioLogueado.role)) {
       return res.status(403).json({ 
         success: false, 
         message: 'Solo médicos pueden acceder a este endpoint' 
@@ -134,7 +134,7 @@ export const getMisCitas = async (req, res) => {
       where: { medicoId: usuarioLogueado.id },
       include: [
         { 
-          model: db.Paciente, 
+          model: Paciente, 
           as: 'paciente',
           attributes: ['id', 'nombre', 'email', 'telefono', 'curp']
         }
@@ -169,7 +169,7 @@ export const getTodasLasCitas = async (req, res) => {
     const usuarioLogueado = req.user;
     
     // Solo ADMIN puede ver todas las citas
-    if (usuarioLogueado.role !== 'ADMIN' && usuarioLogueado.role !== 'SUPER_ADMIN') {
+    if (!ROLES_ADMIN.includes(usuarioLogueado.role)) {
       return res.status(403).json({ 
         success: false, 
         message: 'Solo administradores pueden ver todas las citas' 
@@ -180,7 +180,7 @@ export const getTodasLasCitas = async (req, res) => {
     const citas = await Cita.findAll({
       include: [
         { 
-          model: db.Paciente, 
+          model: Paciente, 
           as: 'paciente',
           attributes: ['id', 'nombre', 'email', 'telefono', 'curp']
         },
@@ -248,8 +248,7 @@ export const updateCitaEstado = async (req, res) => {
         }
 
         // Validar permisos: Solo el médico asignado o un ADMIN pueden modificar
-        const rolesAdmin = ['ADMIN', 'SUPER_ADMIN'];
-        if (!rolesAdmin.includes(usuarioLogueado.role) && citaActual.medicoId !== usuarioLogueado.id) {
+        if (!ROLES_ADMIN.includes(usuarioLogueado.role) && citaActual.medicoId !== usuarioLogueado.id) {
             return res.status(403).json({ 
                 success: false, 
                 message: 'No tienes permiso para modificar esta cita' 
@@ -264,7 +263,7 @@ export const updateCitaEstado = async (req, res) => {
 
         const updatedCita = await Cita.findByPk(id, {
             include: [
-                { model: db.Paciente, as: 'paciente' },
+                { model: Paciente, as: 'paciente' },
                 { model: User, as: 'Medico' }
             ]
         });
