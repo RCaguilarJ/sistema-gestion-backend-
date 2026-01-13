@@ -64,7 +64,8 @@ Example direct definition (Paciente model):
 const Paciente = sequelize.define('Paciente', {
   // ... fields
 }, {
-  timestamps: true,
+  tableName: 'pacientes',
+  timestamps: true
 });
 export default Paciente;
 ```
