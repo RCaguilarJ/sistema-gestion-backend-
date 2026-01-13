@@ -133,7 +133,7 @@ export const getAllPacientes = async (req, res) => {
       whereClause.nutriologoId = req.user.id;
     }
     // Filtro para especialistas médicos: solo ven pacientes con citas
-    else if (req.user && MEDICAL_ROLES.includes(req.user.role) && req.user.role !== 'NUTRI') {
+    else if (req.user && MEDICAL_ROLES.includes(req.user.role)) {
       const citasPacientes = await Cita.findAll({
         where: { medicoId: req.user.id },
         attributes: ['pacienteId'],
@@ -141,12 +141,12 @@ export const getAllPacientes = async (req, res) => {
       });
       const pacienteIds = [...new Set(citasPacientes.map(c => c.pacienteId))];
       
-      if (pacienteIds.length === 0) {
-        // Si el especialista no tiene citas aún, retornar array vacío
-        return res.status(200).json([]);
+      if (pacienteIds.length > 0) {
+        whereClause.id = { [Op.in]: pacienteIds };
+      } else {
+        // Si el especialista no tiene citas aún, filtrar para que no retorne nada
+        whereClause.id = { [Op.in]: [] };
       }
-      
-      whereClause.id = { [Op.in]: pacienteIds };
     }
 
     const pacientes = await Paciente.findAll({ 
