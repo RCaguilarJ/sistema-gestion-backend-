@@ -112,8 +112,13 @@ export const updateCitaEstado = async (req, res) => {
             return res.status(400).json({ message: 'Estado de cita no válido.' });
         }
 
-        // NUEVA VALIDACIÓN: Verificar que el médico tenga permiso
-        const cita = await Cita.findByPk(id);
+        // Buscar cita con relaciones incluidas
+        const cita = await Cita.findByPk(id, {
+            include: [
+                { model: User, as: 'Paciente', attributes: ['nombre', 'email'] },
+                { model: User, as: 'Medico', attributes: ['nombre', 'email', 'role'] }
+            ]
+        });
         
         if (!cita) {
             return res.status(404).json({ message: 'Cita no encontrada.' });
@@ -124,6 +129,8 @@ export const updateCitaEstado = async (req, res) => {
         const esMedicoAsignado = cita.medicoId === req.user.id;
 
         if (!esAdmin && !esMedicoAsignado) {
+            // NOTA: Devuelve detalles para debugging según requerimientos
+            // En producción, considerar logging server-side con mensaje genérico al cliente
             return res.status(403).json({ 
                 message: 'No tienes permiso para modificar esta cita.',
                 detalles: {
@@ -134,26 +141,16 @@ export const updateCitaEstado = async (req, res) => {
             });
         }
 
-        // Actualizar estado
-        const [rowsAffected] = await Cita.update({ estado }, { where: { id } });
+        // Actualizar el estado directamente en la instancia
+        cita.estado = estado;
+        await cita.save();
 
-        if (rowsAffected === 0) {
-            return res.status(404).json({ message: 'No se pudo actualizar la cita.' });
-        }
-
-        const updatedCita = await Cita.findByPk(id, {
-            include: [
-                { model: User, as: 'Paciente', attributes: ['nombre', 'email'] },
-                { model: User, as: 'Medico', attributes: ['nombre', 'email', 'role'] }
-            ]
-        });
-
-        sendCitaToAmd(updatedCita.toJSON())
+        sendCitaToAmd(cita.toJSON())
             .catch((syncError) => console.error('Error sincronizando estado cita AMD:', syncError.message));
 
         res.status(200).json({
             success: true,
-            cita: updatedCita,
+            cita: cita,
             message: `Estado actualizado a: ${estado}`
         });
     } catch (error) {
