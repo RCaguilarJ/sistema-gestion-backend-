@@ -37,19 +37,16 @@ if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir);
 }
 
-<<<<<<< HEAD
-// CORS
-const whitelistEnv = process.env.FRONTEND_URLS || process.env.FRONTEND_URL || 'http://localhost:5174';
+// CORS - Configurado para múltiples entornos
+const whitelistEnv = process.env.FRONTEND_URLS || process.env.FRONTEND_URL || 'http://localhost:5173,http://localhost:5174';
 const whitelist = whitelistEnv
   .split(',')
   .map(origin => origin.trim())
   .filter(Boolean);
-=======
-// --- CORS CONFIGURADO PARA MÚLTIPLES PUERTOS ---
-// Permite acceso desde diferentes puertos de desarrollo de Vite
->>>>>>> 7b3ff6ba8231b0ba67ff0482d876ff4cec9cc648
+
 app.use(cors({
   origin: [
+    ...whitelist,
     'http://localhost:5173', // Puerto por defecto de Vite
     'http://localhost:5174', // Puerto alternativo de Vite
     'http://localhost:3000', // Puerto alternativo
@@ -90,9 +87,6 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/sync/amd', amdSyncRoutes);
 app.use('/api/notifications', notificationRoutes);
 
-<<<<<<< HEAD
-
-=======
 // Servir archivos estáticos del build de producción
 app.use(express.static(path.join(__dirname, 'dist')));
 
@@ -100,7 +94,6 @@ app.use(express.static(path.join(__dirname, 'dist')));
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
->>>>>>> 7b3ff6ba8231b0ba67ff0482d876ff4cec9cc648
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {

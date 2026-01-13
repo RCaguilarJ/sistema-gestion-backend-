@@ -1,6 +1,7 @@
 import { Op } from 'sequelize';
 import db from '../models/index.js'; 
 import { sendCitaToAmd } from '../services/amdClient.js';
+import { ADMIN_ROLES, MEDICAL_ROLES, isAdmin } from '../constants/roles.js';
 
 // Destructuramos los modelos que necesitamos
 const { Cita, User } = db;
@@ -12,7 +13,7 @@ export const getCitasByPacienteId = async (req, res) => {
         const now = new Date();
         const whereBase = { pacienteId };
 
-        if (req.user && !['ADMIN'].includes(req.user.role)) {
+        if (req.user && !isAdmin(req.user.role)) {
             whereBase.medicoId = req.user.id;
         }
         
@@ -80,8 +81,7 @@ export const getPendingCitasForMedico = async (req, res) => {
             return res.status(401).json({ message: 'No autenticado.' });
         }
 
-        const rolesPermitidos = ['DOCTOR', 'NUTRI', 'PSY', 'ENDOCRINOLOGO', 'PODOLOGO', 'PSICOLOGO'];
-        if (!rolesPermitidos.includes(req.user.role)) {
+        if (!MEDICAL_ROLES.includes(req.user.role)) {
             return res.status(403).json({ message: 'Rol sin acceso a pendientes.' });
         }
 
@@ -112,22 +112,125 @@ export const updateCitaEstado = async (req, res) => {
             return res.status(400).json({ message: 'Estado de cita no válido.' });
         }
 
-        const [rowsAffected] = await Cita.update({ estado }, { where: { id } });
-
-        if (rowsAffected === 0) {
+        // Buscar cita con relaciones incluidas
+        const cita = await Cita.findByPk(id, {
+            include: [
+                { model: User, as: 'Paciente', attributes: ['nombre', 'email'] },
+                { model: User, as: 'Medico', attributes: ['nombre', 'email', 'role'] }
+            ]
+        });
+        
+        if (!cita) {
             return res.status(404).json({ message: 'Cita no encontrada.' });
         }
 
-                const updatedCita = await Cita.findByPk(id);
+        // Solo el médico asignado o ADMIN pueden cambiar el estado
+        const esAdmin = isAdmin(req.user.role);
+        const esMedicoAsignado = cita.medicoId === req.user.id;
 
-                sendCitaToAmd(updatedCita.toJSON())
-                    .catch((syncError) => console.error('Error sincronizando estado cita AMD:', syncError.message));
+        if (!esAdmin && !esMedicoAsignado) {
+            // NOTA: Devuelve detalles para debugging según requerimientos
+            // En producción, considerar logging server-side con mensaje genérico al cliente
+            return res.status(403).json({ 
+                message: 'No tienes permiso para modificar esta cita.',
+                detalles: {
+                    medicoAsignado: cita.medicoId,
+                    usuarioActual: req.user.id,
+                    rolUsuario: req.user.role
+                }
+            });
+        }
 
-        res.status(200).json(updatedCita);
+        // Actualizar el estado directamente en la instancia
+        cita.estado = estado;
+        await cita.save();
+
+        sendCitaToAmd(cita.toJSON())
+            .catch((syncError) => console.error('Error sincronizando estado cita AMD:', syncError.message));
+
+        res.status(200).json({
+            success: true,
+            cita: cita,
+            message: `Estado actualizado a: ${estado}`
+        });
     } catch (error) {
         console.error('Error al actualizar estado de cita:', error);
         res.status(500).json({ message: 'Error al actualizar la cita.', error: error.message });
     }
+};
+
+// NUEVO: Obtener TODAS las citas del médico logueado
+export const getMisCitas = async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ message: 'No autenticado.' });
+    }
+
+    if (!MEDICAL_ROLES.includes(req.user.role)) {
+      return res.status(403).json({ 
+        message: 'Solo médicos y especialistas pueden ver sus citas.' 
+      });
+    }
+
+    const citas = await Cita.findAll({
+      where: { medicoId: req.user.id },
+      include: [
+        { 
+          model: User, 
+          as: 'Paciente', 
+          attributes: ['id', 'nombre', 'email'] 
+        }
+      ],
+      order: [['fechaHora', 'DESC']]
+    });
+
+    res.json({ 
+      success: true, 
+      citas,
+      total: citas.length,
+      medicoId: req.user.id,
+      medicoNombre: req.user.nombre
+    });
+  } catch (error) {
+    console.error('Error obteniendo mis citas:', error);
+    res.status(500).json({ 
+      message: 'Error al obtener citas', 
+      error: error.message 
+    });
+  }
+};
+
+// NUEVO: Obtener TODAS las citas del sistema (solo ADMIN)
+export const getAllCitas = async (req, res) => {
+  try {
+    const citas = await Cita.findAll({
+      include: [
+        { 
+          model: User, 
+          as: 'Paciente', 
+          attributes: ['id', 'nombre', 'email'] 
+        },
+        { 
+          model: User, 
+          as: 'Medico', 
+          attributes: ['id', 'nombre', 'email', 'role'] 
+        }
+      ],
+      order: [['fechaHora', 'DESC']]
+    });
+
+    res.json({ 
+      success: true, 
+      citas,
+      total: citas.length
+    });
+  } catch (error) {
+    console.error('Error obteniendo todas las citas:', error);
+    res.status(500).json({ 
+      message: 'Error al obtener citas', 
+      error: error.message 
+    });
+  }
 };
 
 // ¡IMPORTANTE! He eliminado el bloque 'export { ... }' del final para evitar el error de duplicado.
