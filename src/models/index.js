@@ -10,6 +10,7 @@ import Cita from "./Cita.js";
 import Documento from "./Documento.js";
 import Nutricion from "./Nutricion.js";
 import PlanAlimentacion from "./PlanAlimentacion.js";
+import Notification from "./Notification.js";
 
 // --- RELACIONES ---
 
@@ -52,7 +53,8 @@ const db = {
   Cita,
   Documento,
   Nutricion,
-  PlanAlimentacion
+  PlanAlimentacion,
+  Notification
 };
 
 export default db;

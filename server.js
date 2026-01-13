@@ -18,6 +18,7 @@ import nutricionRoutes from './src/routes/nutricionRoutes.js';
 import documentosRoutes from './src/routes/documentosRoutes.js';
 import dashboardRoutes from './src/routes/dashboardRoutes.js'; 
 import amdSyncRoutes from './src/routes/amdSyncRoutes.js';
+import notificationRoutes from './src/routes/notificationRoutes.js';
 
 dotenv.config();
 
@@ -71,6 +72,7 @@ app.use('/api/nutricion', nutricionRoutes);
 app.use('/api/documentos', documentosRoutes);
 app.use('/api/dashboard', dashboardRoutes); 
 app.use('/api/sync/amd', amdSyncRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 
 
