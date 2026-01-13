@@ -119,17 +119,21 @@ function normalizePacientePayload(body = {}, user = null, isUpdate = false) {
 
 /**
  * Obtener todos los pacientes.
- * Si es NUTRI, solo ve los suyos asignados por nutriologoId. 
- * Si es especialista médico (ENDOCRINOLOGO, PSICOLOGO, DOCTOR, etc.), solo ve pacientes con citas.
- * Si es ADMIN/SUPER_ADMIN, ve todos.
+ * - ADMIN/SUPER_ADMIN: ven TODOS los pacientes (sin filtros)
+ * - NUTRI: solo ve pacientes asignados por nutriologoId
+ * - Especialistas médicos (ENDOCRINOLOGO, PSICOLOGO, DOCTOR, etc.): solo ven pacientes con citas
  */
 export const getAllPacientes = async (req, res) => {
   try {
     const whereClause = {};
     const { Cita } = db;
     
+    // ADMIN y SUPER_ADMIN: ven todos los pacientes sin filtros
+    if (req.user && (req.user.role === 'ADMIN' || req.user.role === 'SUPER_ADMIN')) {
+      // No aplicar filtros - verán todos los pacientes
+    }
     // Filtro por rol: Nutriólogo solo ve sus pacientes asignados
-    if (req.user && req.user.role === 'NUTRI') {
+    else if (req.user && req.user.role === 'NUTRI') {
       whereClause.nutriologoId = req.user.id;
     }
     // Filtro para especialistas médicos: solo ven pacientes con citas
