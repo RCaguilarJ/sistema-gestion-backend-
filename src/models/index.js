@@ -6,14 +6,12 @@ import sequelize from "../config/database.js";
 import UserFactory from "./User.js";
 import Paciente from "./Paciente.js";
 import Cita from "./Cita.js";
-<<<<<<< HEAD
+import Consulta from "./Consulta.js";
 // Nuevos modelos SQL
 import Documento from "./Documento.js";
 import Nutricion from "./Nutricion.js";
 import PlanAlimentacion from "./PlanAlimentacion.js";
 import Notification from "./Notification.js";
-=======
->>>>>>> 7b3ff6ba8231b0ba67ff0482d876ff4cec9cc648
 
 // Initialize User model (since it's a factory function)
 const User = UserFactory(sequelize);
@@ -28,16 +26,12 @@ const db = {
   Sequelize,
   User,
   Paciente,
-<<<<<<< HEAD
   Consulta,
   Cita,
   Documento,
   Nutricion,
   PlanAlimentacion,
   Notification
-=======
-  Cita
->>>>>>> 7b3ff6ba8231b0ba67ff0482d876ff4cec9cc648
 };
 
 export default db;
