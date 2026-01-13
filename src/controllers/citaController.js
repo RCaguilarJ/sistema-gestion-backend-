@@ -1,6 +1,7 @@
 import { Op } from 'sequelize';
 import db from '../models/index.js'; 
 import { sendCitaToAmd } from '../services/amdClient.js';
+import { ADMIN_ROLES, MEDICAL_ROLES, isAdmin } from '../constants/roles.js';
 
 // Destructuramos los modelos que necesitamos
 const { Cita, User } = db;
@@ -80,8 +81,7 @@ export const getPendingCitasForMedico = async (req, res) => {
             return res.status(401).json({ message: 'No autenticado.' });
         }
 
-        const rolesPermitidos = ['DOCTOR', 'NUTRI', 'PSY', 'ENDOCRINOLOGO', 'PODOLOGO', 'PSICOLOGO'];
-        if (!rolesPermitidos.includes(req.user.role)) {
+        if (!MEDICAL_ROLES.includes(req.user.role)) {
             return res.status(403).json({ message: 'Rol sin acceso a pendientes.' });
         }
 
@@ -120,7 +120,7 @@ export const updateCitaEstado = async (req, res) => {
         }
 
         // Solo el médico asignado o ADMIN pueden cambiar el estado
-        const esAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(req.user.role);
+        const esAdmin = isAdmin(req.user.role);
         const esMedicoAsignado = cita.medicoId === req.user.id;
 
         if (!esAdmin && !esMedicoAsignado) {
@@ -169,8 +169,7 @@ export const getMisCitas = async (req, res) => {
       return res.status(401).json({ message: 'No autenticado.' });
     }
 
-    const rolesPermitidos = ['DOCTOR', 'NUTRI', 'ENDOCRINOLOGO', 'PODOLOGO', 'PSICOLOGO'];
-    if (!rolesPermitidos.includes(req.user.role)) {
+    if (!MEDICAL_ROLES.includes(req.user.role)) {
       return res.status(403).json({ 
         message: 'Solo médicos y especialistas pueden ver sus citas.' 
       });

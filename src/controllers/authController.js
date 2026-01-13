@@ -1,20 +1,8 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import db from '../models/index.js'; // Acceso a la instancia de Sequelize
-
-const allowedRoles = [
-    "ADMIN",
-    "SUPER_ADMIN",
-    "DOCTOR",
-    "NUTRI",
-    "PSY",
-    "PATIENT",
-    "ENDOCRINOLOGO",
-    "PODOLOGO",
-    "PSICOLOGO"
-];
-
-const JWT_SECRET = process.env.JWT_SECRET || "clave_secreta_super_segura_sistema_medico_2024";
+import db from '../models/index.js';
+import { ALLOWED_ROLES } from '../constants/roles.js';
+import { getJWTSecret, JWT_EXPIRES_IN } from '../constants/config.js';
 
 export const register = async (req, res) => {
     try {
@@ -28,7 +16,7 @@ export const register = async (req, res) => {
         if (await User.findOne({ where: { email: emailTrim } })) return res.status(409).json({ message: "Email registrado" });
         if (await User.findOne({ where: { username: usernameTrim } })) return res.status(409).json({ message: "Username registrado" });
 
-        const normalizedRole = role && allowedRoles.includes(role) ? role : "DOCTOR";
+        const normalizedRole = role && ALLOWED_ROLES.includes(role) ? role : "DOCTOR";
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -39,7 +27,7 @@ export const register = async (req, res) => {
             password: hashedPassword, 
             role: normalizedRole 
         });
-        const token = jwt.sign({ id: newUser.id, role: newUser.role, nombre: newUser.nombre }, JWT_SECRET, { expiresIn: "24h" });
+        const token = jwt.sign({ id: newUser.id, role: newUser.role, nombre: newUser.nombre }, getJWTSecret(), { expiresIn: JWT_EXPIRES_IN });
         res.status(201).json({ token, user: { id: newUser.id, nombre: newUser.nombre, email: newUser.email, role: newUser.role } });
     } catch (error) {
         if (error.name === 'SequelizeUniqueConstraintError') {
@@ -76,8 +64,8 @@ export const login = async (req, res) => {
         role: user.role,
         nombre: user.nombre
       },
-      JWT_SECRET,
-      { expiresIn: '8h' }
+      getJWTSecret(),
+      { expiresIn: JWT_EXPIRES_IN }
     );
 
     // 5. ENVIAR RESPUESTA AL FRONTEND
