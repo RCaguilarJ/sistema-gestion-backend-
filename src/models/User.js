@@ -26,6 +26,7 @@ export default (sequelize) => {
       allowNull: false
     },
     role: {
+      // Estos valores deben coincidir EXACTAMENTE con tu base de datos
       type: DataTypes.ENUM('ADMIN', 'SUPER_ADMIN', 'DOCTOR', 'NUTRI', 'PSY', 'PATIENT', 'ENDOCRINOLOGO', 'PODOLOGO', 'PSICOLOGO'),
       allowNull: false,
       defaultValue: 'DOCTOR'
@@ -35,8 +36,8 @@ export default (sequelize) => {
       defaultValue: 'Activo'
     }
   }, {
-    tableName: 'users',
-    timestamps: true
+    tableName: 'users', // Forza el nombre exacto de la tabla en MySQL
+    timestamps: true    // Espera columnas createdAt y updatedAt
   });
 
   return User;

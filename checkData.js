@@ -1,4 +1,5 @@
 import db from './src/models/index.js';
+import bcrypt from 'bcryptjs';
 
 const checkDatabaseData = async () => {
   try {
@@ -40,6 +41,24 @@ const checkDatabaseData = async () => {
     
     console.log('📋 CONSULTAS:');
     console.log(`   Total: ${totalConsultas}\n`);
+
+    // Crear usuario admin si no existe
+    const adminEmail = 'admin@admin.com';
+    const adminExists = await User.findOne({ where: { email: adminEmail } });
+    if (!adminExists) {
+      const hashedPassword = await bcrypt.hash('admin123', 10);
+      await User.create({
+        nombre: 'Administrador',
+        username: 'admin',
+        email: adminEmail,
+        password: hashedPassword,
+        role: 'ADMIN',
+        estatus: 'Activo'
+      });
+      console.log('✅ Usuario admin creado: admin@admin.com / admin123');
+    } else {
+      console.log('ℹ️  Usuario admin ya existe.');
+    }
 
     if (totalPacientes === 0 && totalCitas === 0 && totalConsultas === 0) {
       console.log('⚠️  ADVERTENCIA: No hay datos de pacientes, citas ni consultas');

@@ -2,11 +2,20 @@ import jwt from 'jsonwebtoken';
 import { getJWTSecret } from '../constants/config.js';
 
 export const authenticate = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  let token = req.headers['authorization'];
+
+  // Permitir token por query string (para SSE y otros casos)
+  if (!token && req.query.token) {
+    token = req.query.token;
+  }
 
   if (!token) {
     return res.status(401).json({ message: 'Acceso denegado. Token no proporcionado.' });
+  }
+
+  // Limpiar el prefijo 'Bearer ' si viene en el header
+  if (token.startsWith('Bearer ')) {
+    token = token.slice(7, token.length);
   }
 
   try {

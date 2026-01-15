@@ -1,19 +1,20 @@
-import { Router } from 'express';
-// CORRECCIÓN: ../middleware y ../controllers
-import { authenticate } from '../middleware/authMiddleware.js'; 
-import { authorizeRoles } from '../middleware/authMiddleware.js';
-import {
-  getAllPacientes,
-  createPaciente,
-  getPaciente,
-  updatePaciente,
-} from '../controllers/pacienteController.js'; 
+import express from 'express';
 
-const router = Router();
+const router = express.Router();
 
-router.get('/', authenticate, getAllPacientes);
-router.post('/', authenticate, authorizeRoles('ADMIN'), createPaciente);
-router.get('/:id', authenticate, getPaciente); 
-router.put('/:id', authenticate, authorizeRoles('ADMIN'), updatePaciente);
+router.get('/todos', async (req, res) => {
+  const doctorId = req.query.doctorId;
+  try {
+    // Pacientes locales
+    const [pacientesLocales] = await db.query('SELECT * FROM pacientes WHERE doctor_id = ?', [doctorId]);
+    // Pacientes externos
+    const [pacientesExternos] = await db.query('SELECT * FROM usuarios WHERE doctor_id = ? AND activo = 1', [doctorId]);
+    // Unir ambos resultados
+    const todosLosPacientes = [...pacientesLocales, ...pacientesExternos];
+    res.json(todosLosPacientes);
+  } catch (error) {
+    res.status(500).json({ message: 'Error al obtener pacientes', error });
+  }
+});
 
 export default router;

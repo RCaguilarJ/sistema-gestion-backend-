@@ -1,247 +1,212 @@
-import Paciente from '../models/Paciente.js';
-import { sendPacienteToAmd } from '../services/amdClient.js';
+import db from '../models/index.js';
+import { Op } from 'sequelize';
 
-// Listas de valores permitidos para validación
-const allowedGeneros = ['Masculino', 'Femenino', 'Otro'];
-const allowedEstatus = ['Activo', 'Inactivo'];
-const allowedRiesgo = ['Alto', 'Medio', 'Bajo'];
-const allowedTipoDiabetes = ['Tipo 1', 'Tipo 2', 'Gestacional', 'Otro'];
+const Paciente = db.Paciente;
 
-/**
- * Función auxiliar para limpiar, validar y normalizar los datos que llegan del frontend.
- * @param {Object} body - El cuerpo de la petición (req.body)
- * @param {Object} user - El usuario autenticado (req.user)
- * @param {Boolean} isUpdate - Indica si es una actualización (para validaciones más flexibles)
- */
-function normalizePacientePayload(body = {}, user = null, isUpdate = false) {
-  const payload = {};
-  const errors = [];
-
-  // --- 1. Datos Personales ---
-  // Nombre
-  const nombre = body.nombre ? String(body.nombre).trim() : '';
-  if (nombre) payload.nombre = nombre;
-  else if (!isUpdate) errors.push('Campo requerido: Nombre');
-
-  // CURP
-  const curp = body.curp ? String(body.curp).trim() : '';
-  if (curp) payload.curp = curp;
-  else if (!isUpdate) errors.push('Campo requerido: CURP');
-
-  // Fecha Nacimiento
-  if (body.fechaNacimiento) payload.fechaNacimiento = body.fechaNacimiento;
-  
-  // Género
-  if (body.genero) {
-    const g = String(body.genero).trim();
-    // Buscamos coincidencia exacta o case-insensitive
-    const match = allowedGeneros.find(x => x.toLowerCase() === g.toLowerCase());
-    if (match) payload.genero = match;
-  }
-
-  // --- 2. Contacto y Domicilio ---
-  const contactFields = [
-    'telefono', 'celular', 'email', 
-    'calleNumero', 'colonia', 'municipio', 'estado', 'codigoPostal'
-  ];
-  
-  contactFields.forEach((field) => {
-    if (body[field] !== undefined) {
-      payload[field] = body[field];
-    }
-  });
-
-  // --- 3. Programa y Servicio (Nuevos Campos) ---
-  const programFields = [
-    'grupo', 'tipoServicio', 'tipoTerapia', 'responsable', 'motivoConsulta'
-  ];
-
-  programFields.forEach((field) => {
-    if (body[field] !== undefined) {
-      payload[field] = body[field];
-    }
-  });
-
-  // --- 4. Fechas y Datos Clínicos ---
-  if (body.mesEstadistico) payload.mesEstadistico = body.mesEstadistico;
-  if (body.fechaDiagnostico) payload.fechaDiagnostico = body.fechaDiagnostico;
-  
-  if (body.tipoDiabetes) {
-    const t = String(body.tipoDiabetes).trim();
-    const match = allowedTipoDiabetes.find(x => x.toLowerCase() === t.toLowerCase());
-    if (match) payload.tipoDiabetes = match;
-  }
-
-  // Booleano "Primera Vez"
-  if (body.primeraVez !== undefined) {
-    payload.primeraVez = Boolean(body.primeraVez);
-  }
-
-  // --- 5. Datos Numéricos (Decimales y Enteros) ---
-  // Estatura ahora es decimal (metros), igual que peso, hba1c e imc
-  ['estatura', 'pesoKg', 'hba1c', 'imc'].forEach((field) => {
-    if (body[field] !== undefined && body[field] !== '') {
-      const n = parseFloat(body[field]);
-      if (!isNaN(n)) payload[field] = n;
-      // Si no es un número válido, podríamos agregar error o ignorarlo.
-      // Aquí lo ignoramos si viene basura, pero si es requerido, agregamos validación.
-    }
-  });
-
-  // --- 6. Configuración Interna ---
-  if (body.estatus) {
-    const e = String(body.estatus).trim();
-    const match = allowedEstatus.find(x => x.toLowerCase() === e.toLowerCase());
-    if (match) payload.estatus = match;
-  }
-  
-  if (body.riesgo) {
-    const r = String(body.riesgo).trim();
-    const match = allowedRiesgo.find(x => x.toLowerCase() === r.toLowerCase());
-    if (match) payload.riesgo = match;
-  }
-
-  // Asignación automática de Nutriólogo si el usuario logueado tiene ese rol
-  if (user && user.role === 'NUTRI') {
-    payload.nutriologoId = user.id;
-  } else if (body.nutriologoId) {
-    // Si es ADMIN, puede asignar manualmente si envía el ID
-    payload.nutriologoId = parseInt(body.nutriologoId, 10);
-  }
-
-  return { payload, errors };
-}
-
-// --- CONTROLADORES EXPORTADOS ---
-
-/**
- * Obtener todos los pacientes.
- * Si es NUTRI, solo ve los suyos. Si es ADMIN/DOCTOR, ve todos.
- */
+// 1. OBTENER TODOS LOS PACIENTES (getAllPacientes)
+// --- CORRECCIÓN: Renombrado de 'getPacientes' a 'getAllPacientes' ---
 export const getAllPacientes = async (req, res) => {
-  try {
-    const whereClause = {};
-    
-    // Filtro por rol: Nutriólogo solo ve sus pacientes asignados
-    if (req.user && req.user.role === 'NUTRI') {
-      whereClause.nutriologoId = req.user.id;
-    }
+    try {
+        const { id, role } = req.user;
+        let whereClause = {};
 
-    const pacientes = await Paciente.findAll({ 
-      where: whereClause,
-      order: [['createdAt', 'DESC']] // Los más nuevos primero
-    });
-    
-    res.status(200).json(pacientes);
-  } catch (error) {
-    console.error("Error getAllPacientes:", error);
-    res.status(500).json({ message: 'Error al obtener pacientes', error: error.message });
-  }
+        console.log(`🔎 Buscando pacientes para: ${role} (ID: ${id})`);
+
+        switch (role) {
+            case 'ADMIN':
+            case 'SUPER_ADMIN':
+                whereClause = {}; // Ven todo
+                break;
+
+            case 'DOCTOR':
+                whereClause = {
+                    [Op.or]: [{ medicoId: id }, { usuarioId: id }]
+                };
+                break;
+
+            case 'NUTRI':
+                whereClause = { nutriologoId: id };
+                break;
+
+            case 'ENDOCRINOLOGO':
+                // Filtro especial para tu base de datos (columna 'endocrinologo')
+                whereClause = { 
+                    [Op.or]: [
+                        { endocrinologo: id },    
+                        { endocrinologoId: id }   
+                    ]
+                };
+                break;
+
+            case 'PODOLOGO':
+                whereClause = { podologoId: id };
+                break;
+
+            case 'PSICOLOGO':
+            case 'PSY':
+                whereClause = { psicologoId: id };
+                break;
+
+            default:
+                // Por seguridad, si no es médico, solo ve lo que creó
+                whereClause = { usuarioId: id };
+        }
+
+        const pacientes = await Paciente.findAll({
+            where: whereClause,
+            order: [['createdAt', 'DESC']]
+        });
+
+        res.json(pacientes);
+
+    } catch (error) {
+        console.error("❌ Error al filtrar pacientes:", error);
+        res.status(500).json({ message: "Error al obtener la lista de pacientes" });
+    }
 };
 
-/**
- * Crear un nuevo paciente.
- */
+// 2. CREAR PACIENTE (createPaciente)
 export const createPaciente = async (req, res) => {
-  try {
-    const { payload, errors } = normalizePacientePayload(req.body, req.user, false);
-    
-    if (errors.length > 0) {
-      return res.status(400).json({ message: 'Error de validación', details: errors });
+    try {
+        const { nombre, email, ...otrosDatos } = req.body;
+        const usuarioId = req.user.id; 
+
+        if (!nombre) {
+            return res.status(400).json({ message: "El nombre es obligatorio" });
+        }
+
+        if (email) {
+            const existe = await Paciente.findOne({ where: { email } });
+            if (existe) {
+                return res.status(409).json({ message: "Ya existe un paciente con este email" });
+            }
+        }
+
+        const nuevoPaciente = await Paciente.create({
+            nombre,
+            email,
+            usuarioId, 
+            ...otrosDatos
+        });
+
+        res.status(201).json({ 
+            message: "Paciente registrado exitosamente", 
+            paciente: nuevoPaciente 
+        });
+
+    } catch (error) {
+        console.error("Error al crear paciente:", error);
+        res.status(500).json({ message: "Error interno al registrar paciente" });
     }
-
-    // Verificar duplicados por CURP
-    const existing = await Paciente.findOne({ where: { curp: payload.curp } });
-    if (existing) {
-      return res.status(409).json({ message: 'El CURP ya está registrado en el sistema.' });
-    }
-
-    const nuevoPaciente = await Paciente.create(payload);
-
-    sendPacienteToAmd(nuevoPaciente.toJSON())
-      .catch((syncError) => console.error('Error sincronizando paciente con AMD:', syncError.message));
-
-    res.status(201).json(nuevoPaciente);
-  } catch (error) {
-    console.error("Error createPaciente:", error);
-    
-    // Manejo de errores específicos de Sequelize
-    if (error.name === 'SequelizeUniqueConstraintError') {
-       return res.status(409).json({ message: 'El CURP ya existe.' });
-    }
-
-    res.status(500).json({ message: 'Error al crear paciente', error: error.message });
-  }
 };
 
-/**
- * Obtener un paciente por ID.
- */
+// Obtener un paciente por ID
 export const getPaciente = async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    // Construir cláusula WHERE
-    const whereClause = { id };
-    if (req.user && req.user.role === 'NUTRI') {
-      whereClause.nutriologoId = req.user.id;
+    try {
+        const paciente = await Paciente.findByPk(req.params.id);
+        if (!paciente) {
+            return res.status(404).json({ message: "Paciente no encontrado" });
+        }
+        res.json(paciente);
+    } catch (error) {
+        console.error("❌ Error al obtener paciente:", error);
+        res.status(500).json({ message: "Error al obtener paciente" });
     }
+};
+// 3. OBTENER UN PACIENTE POR ID (getPacienteById)
+export const getPacienteById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const paciente = await Paciente.findByPk(id);
 
-    const paciente = await Paciente.findOne({ where: whereClause });
-    
-    if (!paciente) {
-      return res.status(404).json({ message: 'Paciente no encontrado o acceso denegado.' });
+        if (!paciente) {
+            return res.status(404).json({ message: "Paciente no encontrado" });
+        }
+        res.json(paciente);
+    } catch (error) {
+        console.error("Error obteniendo paciente:", error);
+        res.status(500).json({ message: "Error al obtener el paciente" });
     }
-
-    res.json(paciente);
-  } catch (error) {
-    console.error("Error getPaciente:", error);
-    res.status(500).json({ message: 'Error servidor', error: error.message });
-  }
 };
 
-/**
- * Actualizar un paciente existente.
- */
+// 4. ACTUALIZAR PACIENTE (updatePaciente)
 export const updatePaciente = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { payload, errors } = normalizePacientePayload(req.body, req.user, true);
+    try {
+        const { id } = req.params;
+        const paciente = await Paciente.findByPk(id);
 
-    if (errors.length > 0) {
-      return res.status(400).json({ message: 'Error de validación', details: errors });
-    }
-    
-    // Verificar permisos y existencia
-    const whereClause = { id };
-    if (req.user && req.user.role === 'NUTRI') {
-      whereClause.nutriologoId = req.user.id;
-    }
+        if (!paciente) {
+            return res.status(404).json({ message: "Paciente no encontrado" });
+        }
 
-    const paciente = await Paciente.findOne({ where: whereClause });
+        await paciente.update(req.body);
+        res.json({ message: "Paciente actualizado correctamente", paciente });
+
+    } catch (error) {
+        console.error("Error actualizando paciente:", error);
+        res.status(500).json({ message: "Error al actualizar datos" });
+    }
+};
+
+// 5. ELIMINAR PACIENTE (deletePaciente)
+export const deletePaciente = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const borrado = await Paciente.destroy({ where: { id } });
+
+        if (!borrado) {
+            return res.status(404).json({ message: "Paciente no encontrado" });
+        }
+        res.json({ message: "Paciente eliminado correctamente" });
+
+    } catch (error) {
+        console.error("Error eliminando paciente:", error);
+        res.status(500).json({ message: "Error al eliminar paciente" });
+    }
+};
+
+// 6. OBTENER PACIENTES POR DOCTOR (getAllPacientesByDoctor)
+export const getAllPacientesByDoctor = async (req, res) => {
+    try {
+        const doctorId = req.query.doctorId;
+        if (!doctorId) {
+            return res.status(400).json({ message: "Falta el parámetro doctorId" });
+        }
+        const pacientes = await Paciente.findAll({
+            where: { medicoId: doctorId }
+        });
+        res.json(pacientes);
+    } catch (error) {
+        console.error("Error en getAllPacientesByDoctor:", error);
+        res.status(500).json({ message: "Error interno al obtener pacientes" });
+    }
+};
+
+// Normaliza el payload de Paciente para asegurar formato y campos
+export function normalizePacientePayload(payload) {
+    // Ejemplo: normaliza nombres, fechas, y elimina campos vacíos
+    const normalized = { ...payload };
+    if (normalized.nombre) {
+        normalized.nombre = normalized.nombre.trim();
+    }
+    if (normalized.email) {
+        normalized.email = normalized.email.toLowerCase().trim();
+    }
+    if (normalized.fechaNacimiento) {
+        normalized.fechaNacimiento = new Date(normalized.fechaNacimiento).toISOString().slice(0, 10);
+    }
+    // Elimina campos vacíos
+    Object.keys(normalized).forEach(key => {
+        if (normalized[key] === null || normalized[key] === undefined || normalized[key] === "") {
+            delete normalized[key];
+        }
+    });
+    return normalized;
+}    const paciente = await db.Paciente.findOne({ where: whereClause });
     if (!paciente) {
       return res.status(404).json({ message: 'Paciente no encontrado para actualizar.' });
     }
 
     // Verificar unicidad de CURP si se está cambiando
     if (payload.curp && payload.curp !== paciente.curp) {
-        const curpOwner = await Paciente.findOne({ where: { curp: payload.curp } });
-        if (curpOwner) {
-            return res.status(409).json({ message: 'El CURP ya pertenece a otro paciente.' });
-        }
-    }
-
-    await paciente.update(payload);
-
-    sendPacienteToAmd(paciente.toJSON())
-      .catch((syncError) => console.error('Error sincronizando actualización AMD:', syncError.message));
-    
-    // Devolver el objeto actualizado
-    res.json(paciente);
-  } catch (error) {
-    console.error("Error updatePaciente:", error);
-    res.status(500).json({ message: 'Error al actualizar', error: error.message });
-  }
-};
-
-export { normalizePacientePayload };
+        const curpOwner = await db.Paciente.findOne({ where: { curp: payload.curp } });

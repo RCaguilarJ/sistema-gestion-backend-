@@ -1,236 +1,243 @@
-import { Op } from 'sequelize';
-import db from '../models/index.js'; 
-import { sendCitaToAmd } from '../services/amdClient.js';
-import { ADMIN_ROLES, MEDICAL_ROLES, isAdmin } from '../constants/roles.js';
+import db from '../models/index.js';
 
-// Destructuramos los modelos que necesitamos
-const { Cita, User } = db;
+// Ajusta si en tu index.js definiste 'citas' en minúscula o 'Cita'
+const Cita = db.Cita || db.citas; 
+const Paciente = db.Paciente;
+const User = db.User; 
 
-// --- OBTENER CITAS DE UN PACIENTE ---
-export const getCitasByPacienteId = async (req, res) => {
-    try {
-        const { pacienteId } = req.params;
-        const now = new Date();
-        const whereBase = { pacienteId };
-
-        if (req.user && !isAdmin(req.user.role)) {
-            whereBase.medicoId = req.user.id;
-        }
-        
-        const proximasCitas = await Cita.findAll({
-            where: { 
-                ...whereBase,
-                fechaHora: { [Op.gte]: now },
-                estado: { [Op.notIn]: ['Cancelada', 'Completada'] }
-            },
-            include: [{ model: User, as: 'Medico', attributes: ['nombre', 'email'] }],
-            order: [['fechaHora', 'ASC']],
-        });
-
-        const historialCitas = await Cita.findAll({
-            where: { 
-                ...whereBase,
-                [Op.or]: [
-                    { fechaHora: { [Op.lt]: now } },
-                    { estado: { [Op.in]: ['Cancelada', 'Completada'] } }
-                ]
-            },
-            include: [{ model: User, as: 'Medico', attributes: ['nombre', 'email'] }],
-            order: [['fechaHora', 'DESC']],
-        });
-
-        res.status(200).json({ proximasCitas, historialCitas });
-    } catch (error) {
-        console.error('Error al obtener citas:', error);
-        res.status(500).json({ message: 'Error interno del servidor al obtener citas.', error: error.message });
-    }
-};
-
-// --- AGENDAR NUEVA CITA (POST) ---
+// 1. CREAR CITA Y ASIGNAR PACIENTE (createCita)
 export const createCita = async (req, res) => {
     try {
-        const { pacienteId } = req.params;
-        const { fechaHora, motivo, medicoId, notas } = req.body; 
+        const { 
+            usuarioId, medicoId, especialidad, fecha, hora, motivo,
+            // Datos del paciente (recibidos desde el PHP)
+            nombrePaciente, emailPaciente, telefonoPaciente, curpPaciente,
+            ...otrosDatos 
+        } = req.body;
 
-        if (!fechaHora || !motivo || !medicoId) {
-            return res.status(400).json({ message: 'Los campos fechaHora, motivo y medicoId son requeridos.' });
+        if (!usuarioId || !fecha || !hora || !medicoId) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "Faltan datos obligatorios (usuarioId, fecha, hora, medicoId)" 
+            });
         }
 
-                const nuevaCita = await Cita.create({
-            pacienteId: parseInt(pacienteId), // Asegurar que sea entero
-            medicoId: parseInt(medicoId),     // Asegurar que sea entero
-            fechaHora: new Date(fechaHora),
-            motivo,
-            notas,
-            estado: 'Pendiente', 
-        });
+        const fechaHoraCita = `${fecha} ${hora}:00`; 
 
-                sendCitaToAmd(nuevaCita.toJSON())
-                    .catch((syncError) => console.error('Error sincronizando cita con AMD:', syncError.message));
-
-        res.status(201).json(nuevaCita);
-    } catch (error) {
-        console.error('Error al crear nueva cita:', error);
-        res.status(500).json({ message: 'Error al agendar la cita.', error: error.message });
-    }
-};
-
-export const getPendingCitasForMedico = async (req, res) => {
-    try {
-        if (!req.user) {
-            return res.status(401).json({ message: 'No autenticado.' });
-        }
-
-        if (!MEDICAL_ROLES.includes(req.user.role)) {
-            return res.status(403).json({ message: 'Rol sin acceso a pendientes.' });
-        }
-
-        const now = new Date();
-        const citas = await Cita.findAll({
+        // A) BLINDAJE: Verificar si ya existe cita en ese horario
+        const citaExistente = await Cita.findOne({
             where: {
-                medicoId: req.user.id,
-                estado: { [Op.in]: ['Pendiente', 'Confirmada'] },
-                fechaHora: { [Op.gte]: now }
-            },
-            order: [['fechaHora', 'ASC']]
+                usuarioId: usuarioId, 
+                fecha_cita: fechaHoraCita, 
+                estado: ['pendiente', 'confirmada'] 
+            }
         });
 
-        res.json(citas);
+        if (citaExistente) {
+            return res.status(409).json({ 
+                success: false,
+                message: "Ya tienes una cita agendada para esta fecha y hora." 
+            });
+        }
+
+        // B) LOGICA DE ASIGNACIÓN AUTOMÁTICA DE ESPECIALISTA
+        // Buscamos el rol del médico para saber en qué columna guardarlo
+        const especialista = await User.findByPk(medicoId);
+        let columnaAsignacion = 'medicoId'; // Por defecto
+
+        if (especialista) {
+            switch (especialista.role) {
+                case 'NUTRI': columnaAsignacion = 'nutriologoId'; break;
+                case 'PSY': 
+                case 'PSICOLOGO': columnaAsignacion = 'psicologoId'; break;
+                // NOTA: En tu SQL la columna se llama 'endocrinologo', sin Id
+                case 'ENDOCRINOLOGO': columnaAsignacion = 'endocrinologo'; break; 
+                case 'PODOLOGO': columnaAsignacion = 'podologoId'; break;
+                default: columnaAsignacion = 'medicoId';
+            }
+        }
+
+        // C) GESTIÓN DEL EXPEDIENTE DEL PACIENTE
+        // Buscamos si el paciente ya existe en la tabla 'pacientes'
+        let paciente = await Paciente.findOne({ where: { usuarioId: usuarioId } });
+
+        if (paciente) {
+            // Si ya existe, le asignamos este nuevo especialista (ej. si ya iba con Nutri y ahora va con Podólogo)
+            await paciente.update({
+                [columnaAsignacion]: medicoId
+            });
+        } else {
+            // Si NO existe, creamos el expediente nuevo
+            // Usamos los datos enviados desde PHP
+
+            const {
+                pacienteId, medicoId, fecha, hora, motivo, notas, especialidad, ...otrosDatos
+            } = req.body;
+
+            if (!pacienteId || !fecha || !hora || !medicoId) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Faltan datos obligatorios (pacienteId, fecha, hora, medicoId)"
+                });
+            }
+
+            const fechaHora = `${fecha} ${hora}:00`;
+
+            // Verificar si ya existe cita en ese horario para ese paciente
+            const citaExistente = await Cita.findOne({
+                where: {
+                    pacienteId: pacienteId,
+                    fechaHora: fechaHora,
+                    estado: ['Pendiente', 'Confirmada']
+                }
+            });
+
+            if (citaExistente) {
+                return res.status(409).json({
+                    success: false,
+                    message: "Ya tienes una cita agendada para esta fecha y hora."
+                });
+            }
+
+            // Crear la cita
+            const nuevaCita = await Cita.create({
+                pacienteId,
+                medicoId,
+                fechaHora,
+                motivo,
+                notas,
+                estado: 'Pendiente',
+                especialidad,
+                ...otrosDatos
+            });
+
+            res.status(201).json({
+                success: true,
+                message: "Cita agendada correctamente",
+                data: nuevaCita
+            });
+        }
     } catch (error) {
-        console.error('Error obteniendo pendientes médico:', error);
-        res.status(500).json({ message: 'Error al obtener pendientes', error: error.message });
+        console.error("Error al crear cita:", error);
+        res.status(500).json({ success: false, message: "Error interno al procesar la solicitud." });
     }
 };
 
-// --- ACTUALIZAR ESTADO DE CITA (PUT) ---
+// 6. OBTENER CITA POR ID (getCitaById)
+export const getCitaById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const cita = await Cita.findByPk(id);
+        if (!cita) return res.status(404).json({ message: "Cita no encontrada" });
+        res.json(cita);
+    } catch (error) {
+        res.status(500).json({ message: "Error al obtener la cita" });
+    }
+};
+
+// 7. ACTUALIZAR CITA (updateCita)
+export const updateCita = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const cita = await Cita.findByPk(id);
+        if (!cita) return res.status(404).json({ message: "Cita no encontrada" });
+        await cita.update(req.body);
+        res.json({ message: "Cita actualizada correctamente", cita });
+    } catch (error) {
+        res.status(500).json({ message: "Error al actualizar la cita" });
+    }
+};
+
+// 8. ELIMINAR CITA (deleteCita)
+export const deleteCita = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const filas = await Cita.destroy({ where: { id } });
+        if (filas === 0) return res.status(404).json({ message: "Cita no encontrada" });
+        res.json({ message: "Cita eliminada correctamente" });
+    } catch (error) {
+        res.status(500).json({ message: "Error al eliminar la cita" });
+    }
+};
+
+// 9. ACTUALIZAR ESTADO DE CITA (updateCitaEstado)
 export const updateCitaEstado = async (req, res) => {
     try {
         const { id } = req.params;
         const { estado } = req.body;
 
-        if (!['Confirmada', 'Cancelada', 'Completada'].includes(estado)) {
-            return res.status(400).json({ message: 'Estado de cita no válido.' });
-        }
-
-        // Buscar cita con relaciones incluidas
-        const cita = await Cita.findByPk(id, {
-            include: [
-                { model: User, as: 'Paciente', attributes: ['nombre', 'email'] },
-                { model: User, as: 'Medico', attributes: ['nombre', 'email', 'role'] }
-            ]
-        });
-        
-        if (!cita) {
-            return res.status(404).json({ message: 'Cita no encontrada.' });
-        }
-
-        // Solo el médico asignado o ADMIN pueden cambiar el estado
-        const esAdmin = isAdmin(req.user.role);
-        const esMedicoAsignado = cita.medicoId === req.user.id;
-
-        if (!esAdmin && !esMedicoAsignado) {
-            // NOTA: Devuelve detalles para debugging según requerimientos
-            // En producción, considerar logging server-side con mensaje genérico al cliente
-            return res.status(403).json({ 
-                message: 'No tienes permiso para modificar esta cita.',
-                detalles: {
-                    medicoAsignado: cita.medicoId,
-                    usuarioActual: req.user.id,
-                    rolUsuario: req.user.role
-                }
+        // Validar el estado recibido contra la lista de valores permitidos
+        const allowedEstados = ["pendiente", "confirmada", "cancelada", "completada"];
+        if (typeof estado !== "string" || !allowedEstados.includes(estado)) {
+            return res.status(400).json({
+                message: "Estado de cita inválido",
+                allowedEstados,
             });
         }
-
-        // Actualizar el estado directamente en la instancia
+        const cita = await Cita.findByPk(id);
+        if (!cita) return res.status(404).json({ message: "Cita no encontrada" });
         cita.estado = estado;
         await cita.save();
-
-        sendCitaToAmd(cita.toJSON())
-            .catch((syncError) => console.error('Error sincronizando estado cita AMD:', syncError.message));
-
-        res.status(200).json({
-            success: true,
-            cita: cita,
-            message: `Estado actualizado a: ${estado}`
-        });
+        res.json({ message: "Estado de la cita actualizado correctamente", cita });
     } catch (error) {
-        console.error('Error al actualizar estado de cita:', error);
-        res.status(500).json({ message: 'Error al actualizar la cita.', error: error.message });
+        res.status(500).json({ message: "Error al actualizar el estado de la cita" });
     }
 };
 
-// NUEVO: Obtener TODAS las citas del médico logueado
-export const getMisCitas = async (req, res) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ message: 'No autenticado.' });
-    }
-
-    if (!MEDICAL_ROLES.includes(req.user.role)) {
-      return res.status(403).json({ 
-        message: 'Solo médicos y especialistas pueden ver sus citas.' 
-      });
-    }
-
-    const citas = await Cita.findAll({
-      where: { medicoId: req.user.id },
-      include: [
-        { 
-          model: User, 
-          as: 'Paciente', 
-          attributes: ['id', 'nombre', 'email'] 
-        }
-      ],
-      order: [['fechaHora', 'DESC']]
-    });
-
-    res.json({ 
-      success: true, 
-      citas,
-      total: citas.length,
-      medicoId: req.user.id,
-      medicoNombre: req.user.nombre
-    });
-  } catch (error) {
-    console.error('Error obteniendo mis citas:', error);
-    res.status(500).json({ 
-      message: 'Error al obtener citas', 
-      error: error.message 
-    });
-  }
-};
-
-// NUEVO: Obtener TODAS las citas del sistema (solo ADMIN)
+// 10. OBTENER TODAS LAS CITAS (getAllCitas)
 export const getAllCitas = async (req, res) => {
-  try {
-    const citas = await Cita.findAll({
-      include: [
-        { 
-          model: User, 
-          as: 'Paciente', 
-          attributes: ['id', 'nombre', 'email'] 
-        },
-        { 
-          model: User, 
-          as: 'Medico', 
-          attributes: ['id', 'nombre', 'email', 'role'] 
-        }
-      ],
-      order: [['fechaHora', 'DESC']]
-    });
-
-    res.json({ 
-      success: true, 
-      citas,
-      total: citas.length
-    });
-  } catch (error) {
-    console.error('Error obteniendo todas las citas:', error);
-    res.status(500).json({ 
-      message: 'Error al obtener citas', 
-      error: error.message 
-    });
-  }
+    try {
+        const citas = await Cita.findAll({
+            order: [['fechaHora', 'ASC']]
+        });
+        res.json(citas);
+    } catch (error) {
+        console.error("Error al obtener citas:", error);
+        res.status(500).json({ message: "Error al obtener las citas" });
+    }
 };
 
-// ¡IMPORTANTE! He eliminado el bloque 'export { ... }' del final para evitar el error de duplicado.
+export const getCitasByPacienteId = async (req, res) => {
+    try {
+        const { pacienteId } = req.params;
+        const citas = await Cita.findAll({
+            where: { pacienteId },
+            order: [['fechaHora', 'DESC']]
+        });
+        res.json(citas || []);
+    } catch (error) {
+        console.error("Error al buscar citas del paciente:", error);
+        res.status(500).json({ message: "Error al obtener el historial de citas" });
+    }
+};
+
+export const getMisCitas = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const citas = await Cita.findAll({
+            where: { pacienteId: userId },
+            order: [['fechaHora', 'DESC']]
+        });
+        res.json(citas);
+    } catch (error) {
+        console.error("Error al obtener mis citas:", error);
+        res.status(500).json({ message: "Error al obtener tus citas" });
+    }
+};
+
+export const getPendingCitasForMedico = async (req, res) => {
+    try {
+        const medicoId = req.user.id;
+        const citas = await Cita.findAll({
+            where: {
+                medicoId: medicoId,
+                estado: 'Pendiente'
+            },
+            order: [['fechaHora', 'ASC']]
+        });
+        res.json(citas);
+    } catch (error) {
+        console.error("Error al obtener citas pendientes:", error);
+        res.status(500).json({ message: "Error al obtener solicitudes pendientes" });
+    }
+};

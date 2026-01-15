@@ -1,43 +1,42 @@
-import { Sequelize } from "sequelize";
-// Ajusta la ruta de config según tu estructura. Si 'config' está en 'src/config':
-import sequelize from "../config/database.js"; 
+import Sequelize from 'sequelize';
 
-// --- 1. MODELOS ACTIVOS ---
-import UserFactory from "./User.js";
-import Paciente from "./Paciente.js";
-import Cita from "./Cita.js";
-// Nuevos modelos SQL
-import Consulta from "./Consulta.js";
-import Documento from "./Documento.js";
-import Nutricion from "./Nutricion.js";
-import PlanAlimentacion from "./PlanAlimentacion.js";
-import Notification from "./Notification.js";
 
-// Initialize User model (since it's a factory function)
-const User = UserFactory(sequelize);
+import sequelize from '../config/database.js'; 
 
-// --- 2. RELACIONES ---
-User.hasMany(Paciente, { foreignKey: "nutriologoId", as: "PacientesAsignados" });
-Paciente.belongsTo(User, { foreignKey: "nutriologoId", as: "Nutriologo" });
 
-// Relaciones para Cita
-Cita.belongsTo(User, { foreignKey: "pacienteId", as: "Paciente" });
-Cita.belongsTo(User, { foreignKey: "medicoId", as: "Medico" });
-User.hasMany(Cita, { foreignKey: "pacienteId", as: "CitasComoPaciente" });
-User.hasMany(Cita, { foreignKey: "medicoId", as: "CitasComoMedico" });
 
-// --- 3. EXPORTAR ---
-const db = {
-  sequelize,
-  Sequelize,
-  User,
-  Paciente,
-  Consulta,
-  Cita,
-  Documento,
-  Nutricion,
-  PlanAlimentacion,
-  Notification
-};
+import defineUserModel from './User.js';
+import definePacienteModel from './Paciente.js';
+import defineCitaModel from './Cita.js';
+
+
+
+const db = {};
+
+db.Sequelize = Sequelize;
+db.sequelize = sequelize;
+
+
+
+
+db.User = defineUserModel(sequelize, Sequelize);
+db.Paciente = definePacienteModel(sequelize, Sequelize);
+db.Cita = defineCitaModel(sequelize, Sequelize);
+
+
+
+
+
+db.User.hasMany(db.Paciente, { foreignKey: 'medicoId', as: 'pacientesMedico' });
+db.User.hasMany(db.Paciente, { foreignKey: 'nutriologoId', as: 'pacientesNutri' });
+db.User.hasMany(db.Paciente, { foreignKey: 'psicologoId', as: 'pacientesPsy' });
+db.User.hasMany(db.Paciente, { foreignKey: 'podologoId', as: 'pacientesPodologo' });
+db.User.hasMany(db.Paciente, { foreignKey: 'endocrinologoId', as: 'pacientesEndocrino' });
+
+db.Paciente.belongsTo(db.User, { foreignKey: 'medicoId', as: 'medico' });
+db.Paciente.belongsTo(db.User, { foreignKey: 'nutriologoId', as: 'nutriologo' });
+db.Paciente.belongsTo(db.User, { foreignKey: 'psicologoId', as: 'psicologo' });
+db.Paciente.belongsTo(db.User, { foreignKey: 'podologoId', as: 'podologo' });
+db.Paciente.belongsTo(db.User, { foreignKey: 'endocrinologoId', as: 'endocrinologo' });
 
 export default db;

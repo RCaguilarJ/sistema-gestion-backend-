@@ -6,11 +6,13 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
+    "reset-admin": "node resetAdminPassword.js",
     "dev": "nodemon server.js",
     "seed": "node seedAdmin.js",
     "setup:db": "node setupDatabase.js"
   },
   "dependencies": {
+    "bcrypt": "^6.0.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

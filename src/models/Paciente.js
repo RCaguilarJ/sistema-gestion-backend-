@@ -1,52 +1,75 @@
 import { DataTypes } from 'sequelize';
-import sequelize from '../config/database.js';
 
-const Paciente = sequelize.define('Paciente', {
-  // ... (Otros campos iguales: nombre, curp, fechas, etc.) ...
-  nombre: { type: DataTypes.STRING, allowNull: false },
-  curp: { type: DataTypes.STRING, allowNull: false, unique: true },
-  fechaNacimiento: { type: DataTypes.DATEONLY },
-  genero: { type: DataTypes.ENUM('Masculino', 'Femenino', 'Otro') },
-  telefono: { type: DataTypes.STRING(15) },
-  celular: { type: DataTypes.STRING(15) },
-  email: { type: DataTypes.STRING, validate: { isEmail: true } },
-  
-  // Domicilio
-  calleNumero: { type: DataTypes.STRING },
-  colonia: { type: DataTypes.STRING },
-  municipio: { type: DataTypes.STRING },
-  estado: { type: DataTypes.STRING },
-  codigoPostal: { type: DataTypes.STRING(10) },
+// Eliminamos la importación de 'database.js' porque index.js nos pasará la conexión.
 
-  // Programa
-  grupo: { type: DataTypes.STRING },
-  tipoServicio: { type: DataTypes.STRING },
-  tipoTerapia: { type: DataTypes.STRING },
-  responsable: { type: DataTypes.STRING },
-  motivoConsulta: { type: DataTypes.TEXT },
+export default (sequelize) => {
+  const Paciente = sequelize.define('Paciente', {
+    // --- DATOS PERSONALES ---
+    nombre: { 
+      type: DataTypes.STRING, 
+      allowNull: false 
+    },
+    curp: { 
+      type: DataTypes.STRING, 
+      allowNull: false, 
+      unique: true 
+    },
+    fechaNacimiento: { type: DataTypes.DATEONLY },
+    genero: { type: DataTypes.ENUM('Masculino', 'Femenino', 'Otro') },
+    
+    // --- CONTACTO ---
+    telefono: { type: DataTypes.STRING(15) },
+    celular: { type: DataTypes.STRING(15) },
+    email: { 
+      type: DataTypes.STRING, 
+      validate: { isEmail: true } 
+    },
 
-  // --- CAMBIO AQUÍ: ESTATURA EN METROS ---
-  estatura: { 
-    type: DataTypes.DECIMAL(3, 2), // Permite 1.65, 1.80, etc.
-    allowNull: true 
-  },
-  // Eliminamos estaturaCm
+    // --- DOMICILIO ---
+    calleNumero: { type: DataTypes.STRING },
+    colonia: { type: DataTypes.STRING },
+    municipio: { type: DataTypes.STRING },
+    estado: { type: DataTypes.STRING },
+    codigoPostal: { type: DataTypes.STRING(10) },
 
-  pesoKg: { type: DataTypes.DECIMAL(5, 1) },
-  hba1c: { type: DataTypes.DECIMAL(4, 1) },
-  imc: { type: DataTypes.DECIMAL(4, 1) },
+    // --- PROGRAMA / ADMIN ---
+    grupo: { type: DataTypes.STRING },
+    tipoServicio: { type: DataTypes.STRING },
+    tipoTerapia: { type: DataTypes.STRING },
+    responsable: { type: DataTypes.STRING },
+    motivoConsulta: { type: DataTypes.TEXT },
+    mesEstadistico: { type: DataTypes.STRING },
+    primeraVez: { type: DataTypes.BOOLEAN, defaultValue: true },
+    estatus: { type: DataTypes.ENUM('Activo', 'Inactivo'), defaultValue: 'Activo' },
 
-  tipoDiabetes: { type: DataTypes.ENUM('Tipo 1', 'Tipo 2', 'Gestacional', 'Otro') },
-  fechaDiagnostico: { type: DataTypes.DATEONLY },
-  mesEstadistico: { type: DataTypes.STRING },
-  primeraVez: { type: DataTypes.BOOLEAN, defaultValue: true },
-  
-  estatus: { type: DataTypes.ENUM('Activo', 'Inactivo'), defaultValue: 'Activo' },
-  riesgo: { type: DataTypes.ENUM('Alto', 'Medio', 'Bajo') },
-  nutriologoId: { type: DataTypes.INTEGER, allowNull: true },
-  ultimaVisita: { type: DataTypes.DATE },
-}, {
-  timestamps: true,
-});
+    // --- DATOS CLÍNICOS Y MÉTRICAS ---
+    estatura: { 
+      type: DataTypes.DECIMAL(3, 2), 
+      allowNull: true 
+    },
+    pesoKg: { type: DataTypes.DECIMAL(5, 1) },
+    hba1c: { type: DataTypes.DECIMAL(4, 1) },
+    imc: { type: DataTypes.DECIMAL(4, 1) },
+    tipoDiabetes: { type: DataTypes.ENUM('Tipo 1', 'Tipo 2', 'Gestacional', 'Otro') },
+    fechaDiagnostico: { type: DataTypes.DATEONLY },
+    riesgo: { type: DataTypes.ENUM('Alto', 'Medio', 'Bajo') },
+    ultimaVisita: { type: DataTypes.DATE },
 
-export default Paciente;
+    // --- ASIGNACIÓN DE ESPECIALISTAS ---
+    usuarioId: { 
+      type: DataTypes.INTEGER,
+      allowNull: false 
+    },
+    nutriologoId: { type: DataTypes.INTEGER, allowNull: true },
+    medicoId: { type: DataTypes.INTEGER, allowNull: true },
+    psicologoId: { type: DataTypes.INTEGER, allowNull: true },
+    endocrinologoId: { type: DataTypes.INTEGER, allowNull: true },
+    podologoId: { type: DataTypes.INTEGER, allowNull: true }
+
+  }, {
+    timestamps: true,
+    tableName: 'pacientes'
+  });
+
+  return Paciente;
+};
