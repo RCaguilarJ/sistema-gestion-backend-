@@ -6,6 +6,7 @@ import sequelize from "../config/database.js";
 import UserFactory from "./User.js";
 import Paciente from "./Paciente.js";
 import Cita from "./Cita.js";
+import Consulta from "./Consulta.js";
 // Nuevos modelos SQL
 import Consulta from "./Consulta.js";
 import Documento from "./Documento.js";

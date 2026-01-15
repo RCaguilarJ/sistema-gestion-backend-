@@ -3,6 +3,20 @@ import jwt from 'jsonwebtoken';
 import db from '../models/index.js';
 import { ALLOWED_ROLES } from '../constants/roles.js';
 import { getJWTSecret, JWT_EXPIRES_IN } from '../constants/config.js';
+import db from '../models/index.js'; // Acceso a la instancia de Sequelize
+
+const allowedRoles = [
+    "ADMIN",
+    "DOCTOR",
+    "NUTRI",
+    "PSY",
+    "PATIENT",
+    "ENDOCRINOLOGO",
+    "PODOLOGO",
+    "PSICOLOGO"
+];
+
+const JWT_SECRET = process.env.JWT_SECRET || "secreto_temporal";
 
 export const register = async (req, res) => {
     try {
@@ -30,6 +44,8 @@ export const register = async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
+        const hashedPassword = await bcrypt.hash(password, 10);
+        
         const newUser = await User.create({ 
             nombre, 
             username: usernameTrim,
@@ -52,6 +68,7 @@ export const register = async (req, res) => {
                 email: newUser.email, 
                 role: newUser.role 
             } 
+            nombre, username: usernameTrim, email: emailTrim, password: hashedPassword, role: normalizedRole 
         });
     } catch (error) {
         console.error("Error en el registro:", error);

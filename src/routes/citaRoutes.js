@@ -30,5 +30,9 @@ router.get('/mis-citas', authenticate, getMisCitas);
 
 // Ver TODAS las citas del sistema (solo ADMIN)
 router.get('/todas', authenticate, authorizeRoles('ADMIN'), getAllCitas);
+router.get('/paciente/:pacienteId', authenticate, getCitasByPacienteId); 
+router.post('/paciente/:pacienteId', authenticate, createCita); 
+router.put('/:id/estado', authenticate, updateCitaEstado); 
+router.get('/pendientes/mias', authenticate, getPendingCitasForMedico);
 
 export default router;

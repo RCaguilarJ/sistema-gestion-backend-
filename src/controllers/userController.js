@@ -1,5 +1,7 @@
-import User from "../models/User.js";
+import db from "../models/index.js";
 import bcrypt from "bcryptjs";
+
+const { User } = db;
 
 // Crear nuevo usuario (Solo ADMIN)
 export const createUser = async (req, res) => {

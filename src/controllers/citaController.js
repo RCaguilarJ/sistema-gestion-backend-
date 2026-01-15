@@ -3,8 +3,8 @@ import db from '../models/index.js';
 import { sendCitaToAmd } from '../services/amdClient.js';
 import { ADMIN_ROLES, MEDICAL_ROLES, isAdmin } from '../constants/roles.js';
 
-// Destructuramos los modelos que necesitamos
-const { Cita, User } = db;
+// Destructuramos el modelo necesario
+const { Cita } = db;
 
 // --- OBTENER CITAS DE UN PACIENTE ---
 export const getCitasByPacienteId = async (req, res) => {
@@ -23,7 +23,6 @@ export const getCitasByPacienteId = async (req, res) => {
                 fechaHora: { [Op.gte]: now },
                 estado: { [Op.notIn]: ['Cancelada', 'Completada'] }
             },
-            include: [{ model: User, as: 'Medico', attributes: ['nombre', 'email'] }],
             order: [['fechaHora', 'ASC']],
         });
 
@@ -35,7 +34,6 @@ export const getCitasByPacienteId = async (req, res) => {
                     { estado: { [Op.in]: ['Cancelada', 'Completada'] } }
                 ]
             },
-            include: [{ model: User, as: 'Medico', attributes: ['nombre', 'email'] }],
             order: [['fechaHora', 'DESC']],
         });
 
@@ -50,15 +48,14 @@ export const getCitasByPacienteId = async (req, res) => {
 export const createCita = async (req, res) => {
     try {
         const { pacienteId } = req.params;
-        const { fechaHora, motivo, medicoId, notas } = req.body; 
+        const { fechaHora, motivo, notas } = req.body; 
 
-        if (!fechaHora || !motivo || !medicoId) {
-            return res.status(400).json({ message: 'Los campos fechaHora, motivo y medicoId son requeridos.' });
+        if (!fechaHora || !motivo) {
+            return res.status(400).json({ message: 'Los campos fechaHora y motivo son requeridos.' });
         }
 
                 const nuevaCita = await Cita.create({
             pacienteId: parseInt(pacienteId), // Asegurar que sea entero
-            medicoId: parseInt(medicoId),     // Asegurar que sea entero
             fechaHora: new Date(fechaHora),
             motivo,
             notas,

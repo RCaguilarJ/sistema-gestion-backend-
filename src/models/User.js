@@ -29,6 +29,9 @@ export default (sequelize) => {
       type: DataTypes.ENUM('ADMIN', 'SUPER_ADMIN', 'DOCTOR', 'NUTRI', 'PSY', 'PATIENT', 'ENDOCRINOLOGO', 'PODOLOGO', 'PSICOLOGO'),
       allowNull: false,
       defaultValue: 'DOCTOR'
+      type: DataTypes.ENUM('ADMIN', 'DOCTOR', 'NUTRI', 'PSY', 'PATIENT', 'ENDOCRINOLOGO', 'PODOLOGO', 'PSICOLOGO'),
+      allowNull: false,
+      defaultValue: 'PATIENT'
     },
     estatus: {
       type: DataTypes.ENUM('Activo', 'Inactivo'),

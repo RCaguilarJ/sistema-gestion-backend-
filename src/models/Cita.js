@@ -10,7 +10,7 @@ const Cita = sequelize.define('Cita', {
     defaultValue: 'Pendiente' 
   },
   pacienteId: { type: DataTypes.INTEGER, allowNull: false },
-  medicoId: { type: DataTypes.INTEGER, allowNull: false }
+  medicoId: { type: DataTypes.INTEGER, allowNull: true }
 });
 
 export default Cita;

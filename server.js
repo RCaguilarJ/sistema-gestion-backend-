@@ -44,6 +44,9 @@ const whitelist = whitelistEnv
   .map(origin => origin.trim())
   .filter(Boolean);
 
+
+// --- CORS CONFIGURADO PARA MÚLTIPLES PUERTOS ---
+// Permite acceso desde diferentes puertos de desarrollo de Vite
 app.use(cors({
   origin: [
     ...whitelist,
