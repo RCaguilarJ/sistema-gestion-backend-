@@ -49,3 +49,14 @@ const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });
+
+
+const cors = require('cors');
+
+app.use(cors({
+  origin: [
+    "https://sistema-gestion-medica.vercel.app", 
+    "http://localhost:5173" // Para que sigas pudiendo probar en local
+  ],
+  credentials: true
+}));
