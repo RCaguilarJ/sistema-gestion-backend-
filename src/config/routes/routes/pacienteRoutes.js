@@ -1,28 +1,43 @@
-// routes/pacienteRoutes.js
-import { Router } from 'express';
-// Usamos 'authenticate', que es el nombre correcto de la función en tu middleware/authMiddleware.js
-import { authenticate } from '../../middleware/authMiddleware.js'; 
+import { Router } from "express";
+import multer from "multer";
+import path from "path";
+import { authenticate } from "../../../middleware/authMiddleware.js";
 import {
   getAllPacientes,
+  getPacienteById,
   createPaciente,
-  getPaciente,       // Función para GET /:id
-  updatePaciente,    // Función para PUT /:id
-} from '../../controllers/pacienteController.js'; 
+  updatePaciente,
+  deletePaciente,
+  getPacientesByEspecialista,
+  validateImportPacientes,
+  importPacientesFromExcel,
+} from "../../../controllers/pacienteController.js";
 
 const router = Router();
 
-// Todas las rutas de Pacientes requieren que el usuario esté logueado
-// GET /api/pacientes/
-router.get('/', authenticate, getAllPacientes);
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "uploads/");
+  },
+  filename: (req, file, cb) => {
+    cb(null, `${Date.now()}${path.extname(file.originalname)}`);
+  },
+});
 
-// POST /api/pacientes/
-router.post('/', authenticate, createPaciente);
+const upload = multer({ storage });
 
-// --- RUTA DINÁMICA CLAVE ---
-// GET /api/pacientes/:id (Para ver los detalles del paciente)
-router.get('/:id', authenticate, getPaciente); 
+// Proteger todas las rutas con autenticacion
+router.use(authenticate);
 
-// PUT /api/pacientes/:id (Para editar los detalles del paciente)
-router.put('/:id', authenticate, updatePaciente);
+// IMPORTANTE: rutas especificas ANTES de "/:id"
+router.post("/importar/validar", upload.single("archivo"), validateImportPacientes);
+router.post("/importar", upload.single("archivo"), importPacientesFromExcel);
+router.get("/especialista/:especialistaId", getPacientesByEspecialista);
+
+router.get("/", getAllPacientes);
+router.get("/:id", getPacienteById);
+router.post("/", createPaciente);
+router.put("/:id", updatePaciente);
+router.delete("/:id", deletePaciente);
 
 export default router;

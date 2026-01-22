@@ -10,6 +10,6 @@ const router = Router();
 
 router.get('/poll', authenticate, pollNotifications);
 router.get('/stream', authenticate, streamNotifications);
-router.post('/:id/read', authenticate, markNotificationRead);
+router.patch('/:id/read', authenticate, markNotificationRead);
 
 export default router;

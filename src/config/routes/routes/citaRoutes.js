@@ -1,23 +1,27 @@
-// routes/citaRoutes.js
-import { Router } from 'express';
-// --- CORRECCIÓN: Usamos 'authenticate' ---
-import { authenticate } from '../../middleware/authMiddleware.js'; 
+// src/config/routes/routes/pacienteRoutes.js
+import { Router } from "express";
+
+
 import {
-  getCitasByPacienteId,
-  createCita,
-  updateCitaEstado,
-} from '../../controllers/citaController.js';
+  getAllPacientes,
+  getPacienteById,
+  createPaciente,
+  updatePaciente,
+  deletePaciente,
+  getPacientesByEspecialista,
+} from "../../../controllers/pacienteController.js";
+
+
 
 const router = Router();
 
-// Todas las rutas de citas requieren autenticación
-// GET /api/citas/paciente/:pacienteId (Obtener Próximas Citas e Historial)
-router.get('/paciente/:pacienteId', authenticate, getCitasByPacienteId); 
+// IMPORTANTE: rutas específicas ANTES de "/:id"
+router.get("/especialista/:especialistaId", /*verifyToken,*/ getPacientesByEspecialista);
 
-// POST /api/citas/paciente/:pacienteId (Agendar Nueva Cita)
-router.post('/paciente/:pacienteId', authenticate, createCita); 
-
-// PUT /api/citas/:id/estado (Actualizar el estado de una cita: Confirmada, Cancelada, Completada)
-router.put('/:id/estado', authenticate, updateCitaEstado); 
+router.get("/", /*verifyToken,*/ getAllPacientes);
+router.get("/:id", /*verifyToken,*/ getPacienteById);
+router.post("/", /*verifyToken,*/ createPaciente);
+router.put("/:id", /*verifyToken,*/ updatePaciente);
+router.delete("/:id",  deletePaciente);
 
 export default router;

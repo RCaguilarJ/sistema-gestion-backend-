@@ -2,9 +2,18 @@ import { Op } from 'sequelize';
 import Paciente from '../models/Paciente.js';
 import User from '../models/User.js';
 import Cita from '../models/Cita.js';
-import { normalizePacientePayload } from './pacienteController.js';
 
 const specialistRoles = ['DOCTOR', 'NUTRI', 'ENDOCRINOLOGO', 'PODOLOGO', 'PSICOLOGO'];
+
+const normalizeEstado = (estado) => {
+  if (!estado) return null;
+  const value = estado.toString().trim().toLowerCase();
+  if (value === 'pendiente') return 'Pendiente';
+  if (value === 'confirmada' || value === 'confirmado') return 'Confirmada';
+  if (value === 'cancelada' || value === 'cancelado') return 'Cancelada';
+  if (value === 'completada' || value === 'completado') return 'Completada';
+  return null;
+};
 
 export const upsertPacienteFromAmd = async (req, res) => {
   try {
@@ -65,7 +74,8 @@ export const createCitaFromAmd = async (req, res) => {
       medicoRole,
       fechaHora,
       motivo,
-      notas
+      notas,
+      estado
     } = req.body ?? {};
 
     if (!fechaHora || !motivo) {
@@ -112,7 +122,7 @@ export const createCitaFromAmd = async (req, res) => {
       fechaHora: new Date(fechaHora),
       motivo,
       notas,
-      estado: 'Pendiente'
+      estado: normalizeEstado(estado) || 'Pendiente'
     });
 
     res.status(201).json({ message: 'Cita creada vía AMD', cita: nuevaCita });

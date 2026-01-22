@@ -1,34 +1,25 @@
-import { Router } from 'express';
-// CORRECCIÓN: ../middleware y ../controllers
-import { authenticate } from '../middleware/authMiddleware.js'; 
-import { authorizeRoles } from '../middleware/authMiddleware.js';
+import { Router } from "express";
+import { authenticate } from "../middleware/authMiddleware.js";
 import {
+  getCitasByDoctor,
+  getCitasAmd,
+  getCitasPortal,
+  updateCitaPortalEstado,
+  createPacienteFromCita,
   getCitasByPacienteId,
-  createCita,
-  updateCitaEstado,
-  getPendingCitasForMedico,
-  getMisCitas,
-  getAllCitas
-} from '../controllers/citaController.js';
+  createCitaByPaciente,
+} from "../controllers/citaController.js";
 
 const router = Router();
 
-// Citas de un paciente específico (filtrado automático por médico si no es ADMIN)
-router.get('/paciente/:pacienteId', authenticate, getCitasByPacienteId);
+router.use(authenticate);
 
-// Crear cita - Cualquier usuario autenticado puede crear (paciente o médico)
-router.post('/paciente/:pacienteId', authenticate, createCita);
-
-// Actualizar estado - Solo médico asignado o ADMIN
-router.put('/:id/estado', authenticate, updateCitaEstado);
-
-// Ver citas pendientes del médico logueado
-router.get('/pendientes/mias', authenticate, getPendingCitasForMedico);
-
-// Ver TODAS las citas del médico logueado
-router.get('/mis-citas', authenticate, getMisCitas);
-
-// Ver TODAS las citas del sistema (solo ADMIN)
-router.get('/todas', authenticate, authorizeRoles('ADMIN'), getAllCitas);
+router.get("/doctor/:medicoId", getCitasByDoctor);
+router.get("/paciente/:pacienteId", getCitasByPacienteId);
+router.get("/amd", getCitasAmd);
+router.get("/portal", getCitasPortal);
+router.put("/portal/:citaId/estado", updateCitaPortalEstado);
+router.post("/portal/:citaId/crear-paciente", createPacienteFromCita);
+router.post("/paciente/:pacienteId", createCitaByPaciente);
 
 export default router;

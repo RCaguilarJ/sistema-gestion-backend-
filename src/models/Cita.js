@@ -11,6 +11,8 @@ export default (sequelize) => {
     },
     pacienteId: { type: DataTypes.INTEGER, allowNull: false },
     medicoId: { type: DataTypes.INTEGER, allowNull: false }
+  }, {
+    tableName: 'cita'
   });
   return Cita;
 };

@@ -2,7 +2,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
-import { authenticate } from '../../middleware/authMiddleware.js';
+import { authenticate } from '../../../middleware/authMiddleware.js';
 import { 
     getDocumentos, 
     uploadDocumento, 

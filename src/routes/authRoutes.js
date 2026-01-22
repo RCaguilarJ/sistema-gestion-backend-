@@ -1,14 +1,10 @@
-import express from "express";
-// CORRECCIÓN: ../controllers
-import { register, login } from "../controllers/authController.js";
-import { authenticate } from "../middleware/authMiddleware.js";
+import { Router } from "express";
+import { login } from "../controllers/authController.js";
+import { createUser } from "../controllers/userController.js";
 
-const router = express.Router();
+const router = Router();
 
-router.post("/register", register);
 router.post("/login", login);
-router.get("/me", authenticate, (req, res) => {
-  res.json({ user: req.user });
-});
+router.post("/register", createUser);
 
 export default router;

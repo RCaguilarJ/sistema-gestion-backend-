@@ -11,8 +11,7 @@ export default (sequelize) => {
     },
     curp: { 
       type: DataTypes.STRING, 
-      allowNull: false, 
-      unique: true 
+      allowNull: true 
     },
     fechaNacimiento: { type: DataTypes.DATEONLY },
     genero: { type: DataTypes.ENUM('Masculino', 'Femenino', 'Otro') },

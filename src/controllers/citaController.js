@@ -1,243 +1,346 @@
-import db from '../models/index.js';
+import db from "../models/index.js";
 
-// Ajusta si en tu index.js definiste 'citas' en minúscula o 'Cita'
-const Cita = db.Cita || db.citas; 
-const Paciente = db.Paciente;
-const User = db.User; 
-
-// 1. CREAR CITA Y ASIGNAR PACIENTE (createCita)
-export const createCita = async (req, res) => {
-    try {
-        const { 
-            usuarioId, medicoId, especialidad, fecha, hora, motivo,
-            // Datos del paciente (recibidos desde el PHP)
-            nombrePaciente, emailPaciente, telefonoPaciente, curpPaciente,
-            ...otrosDatos 
-        } = req.body;
-
-        if (!usuarioId || !fecha || !hora || !medicoId) {
-            return res.status(400).json({ 
-                success: false, 
-                message: "Faltan datos obligatorios (usuarioId, fecha, hora, medicoId)" 
-            });
-        }
-
-        const fechaHoraCita = `${fecha} ${hora}:00`; 
-
-        // A) BLINDAJE: Verificar si ya existe cita en ese horario
-        const citaExistente = await Cita.findOne({
-            where: {
-                usuarioId: usuarioId, 
-                fecha_cita: fechaHoraCita, 
-                estado: ['pendiente', 'confirmada'] 
-            }
-        });
-
-        if (citaExistente) {
-            return res.status(409).json({ 
-                success: false,
-                message: "Ya tienes una cita agendada para esta fecha y hora." 
-            });
-        }
-
-        // B) LOGICA DE ASIGNACIÓN AUTOMÁTICA DE ESPECIALISTA
-        // Buscamos el rol del médico para saber en qué columna guardarlo
-        const especialista = await User.findByPk(medicoId);
-        let columnaAsignacion = 'medicoId'; // Por defecto
-
-        if (especialista) {
-            switch (especialista.role) {
-                case 'NUTRI': columnaAsignacion = 'nutriologoId'; break;
-                case 'PSY': 
-                case 'PSICOLOGO': columnaAsignacion = 'psicologoId'; break;
-                // NOTA: En tu SQL la columna se llama 'endocrinologo', sin Id
-                case 'ENDOCRINOLOGO': columnaAsignacion = 'endocrinologo'; break; 
-                case 'PODOLOGO': columnaAsignacion = 'podologoId'; break;
-                default: columnaAsignacion = 'medicoId';
-            }
-        }
-
-        // C) GESTIÓN DEL EXPEDIENTE DEL PACIENTE
-        // Buscamos si el paciente ya existe en la tabla 'pacientes'
-        let paciente = await Paciente.findOne({ where: { usuarioId: usuarioId } });
-
-        if (paciente) {
-            // Si ya existe, le asignamos este nuevo especialista (ej. si ya iba con Nutri y ahora va con Podólogo)
-            await paciente.update({
-                [columnaAsignacion]: medicoId
-            });
-        } else {
-            // Si NO existe, creamos el expediente nuevo
-            // Usamos los datos enviados desde PHP
-
-            const {
-                pacienteId, medicoId, fecha, hora, motivo, notas, especialidad, ...otrosDatos
-            } = req.body;
-
-            if (!pacienteId || !fecha || !hora || !medicoId) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Faltan datos obligatorios (pacienteId, fecha, hora, medicoId)"
-                });
-            }
-
-            const fechaHora = `${fecha} ${hora}:00`;
-
-            // Verificar si ya existe cita en ese horario para ese paciente
-            const citaExistente = await Cita.findOne({
-                where: {
-                    pacienteId: pacienteId,
-                    fechaHora: fechaHora,
-                    estado: ['Pendiente', 'Confirmada']
-                }
-            });
-
-            if (citaExistente) {
-                return res.status(409).json({
-                    success: false,
-                    message: "Ya tienes una cita agendada para esta fecha y hora."
-                });
-            }
-
-            // Crear la cita
-            const nuevaCita = await Cita.create({
-                pacienteId,
-                medicoId,
-                fechaHora,
-                motivo,
-                notas,
-                estado: 'Pendiente',
-                especialidad,
-                ...otrosDatos
-            });
-
-            res.status(201).json({
-                success: true,
-                message: "Cita agendada correctamente",
-                data: nuevaCita
-            });
-        }
-    } catch (error) {
-        console.error("Error al crear cita:", error);
-        res.status(500).json({ success: false, message: "Error interno al procesar la solicitud." });
-    }
+const parseDate = (value) => {
+  if (!value) return null;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value;
+  }
+  const text = value.toString().trim();
+  if (!text) return null;
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(text)) {
+    const [day, month, year] = text.split("/");
+    return new Date(`${year}-${month}-${day}`);
+  }
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
-// 6. OBTENER CITA POR ID (getCitaById)
-export const getCitaById = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const cita = await Cita.findByPk(id);
-        if (!cita) return res.status(404).json({ message: "Cita no encontrada" });
-        res.json(cita);
-    } catch (error) {
-        res.status(500).json({ message: "Error al obtener la cita" });
-    }
+const toTrimmedString = (value) => {
+  if (value === null || value === undefined) return null;
+  const text = value.toString().trim();
+  return text.length > 0 ? text : null;
 };
 
-// 7. ACTUALIZAR CITA (updateCita)
-export const updateCita = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const cita = await Cita.findByPk(id);
-        if (!cita) return res.status(404).json({ message: "Cita no encontrada" });
-        await cita.update(req.body);
-        res.json({ message: "Cita actualizada correctamente", cita });
-    } catch (error) {
-        res.status(500).json({ message: "Error al actualizar la cita" });
-    }
-};
-
-// 8. ELIMINAR CITA (deleteCita)
-export const deleteCita = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const filas = await Cita.destroy({ where: { id } });
-        if (filas === 0) return res.status(404).json({ message: "Cita no encontrada" });
-        res.json({ message: "Cita eliminada correctamente" });
-    } catch (error) {
-        res.status(500).json({ message: "Error al eliminar la cita" });
-    }
-};
-
-// 9. ACTUALIZAR ESTADO DE CITA (updateCitaEstado)
-export const updateCitaEstado = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { estado } = req.body;
-
-        // Validar el estado recibido contra la lista de valores permitidos
-        const allowedEstados = ["pendiente", "confirmada", "cancelada", "completada"];
-        if (typeof estado !== "string" || !allowedEstados.includes(estado)) {
-            return res.status(400).json({
-                message: "Estado de cita inválido",
-                allowedEstados,
-            });
-        }
-        const cita = await Cita.findByPk(id);
-        if (!cita) return res.status(404).json({ message: "Cita no encontrada" });
-        cita.estado = estado;
-        await cita.save();
-        res.json({ message: "Estado de la cita actualizado correctamente", cita });
-    } catch (error) {
-        res.status(500).json({ message: "Error al actualizar el estado de la cita" });
-    }
-};
-
-// 10. OBTENER TODAS LAS CITAS (getAllCitas)
-export const getAllCitas = async (req, res) => {
-    try {
-        const citas = await Cita.findAll({
-            order: [['fechaHora', 'ASC']]
-        });
-        res.json(citas);
-    } catch (error) {
-        console.error("Error al obtener citas:", error);
-        res.status(500).json({ message: "Error al obtener las citas" });
-    }
+const normalizeEstadoCita = (estado) => {
+  if (!estado) return "Pendiente";
+  const value = estado.toString().trim().toLowerCase();
+  if (value === "confirmada" || value === "confirmado") return "Confirmada";
+  if (value === "pendiente") return "Pendiente";
+  if (value === "cancelada" || value === "cancelado") return "Cancelada";
+  if (value === "completada" || value === "completado") return "Completada";
+  return "Pendiente";
 };
 
 export const getCitasByPacienteId = async (req, res) => {
-    try {
-        const { pacienteId } = req.params;
-        const citas = await Cita.findAll({
-            where: { pacienteId },
-            order: [['fechaHora', 'DESC']]
-        });
-        res.json(citas || []);
-    } catch (error) {
-        console.error("Error al buscar citas del paciente:", error);
-        res.status(500).json({ message: "Error al obtener el historial de citas" });
+  try {
+    const { pacienteId } = req.params;
+    const pacienteIdNumber = Number(pacienteId);
+    if (!Number.isFinite(pacienteIdNumber) || pacienteIdNumber <= 0) {
+      return res.status(400).json({ error: "pacienteId invalido" });
     }
+
+    const rows = await db.Cita.findAll({
+      where: { pacienteId: pacienteIdNumber },
+      order: [["fechaHora", "DESC"]],
+    });
+
+    return res.json(rows);
+  } catch (error) {
+    console.error("Error obteniendo citas del paciente:", error);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
 };
 
-export const getMisCitas = async (req, res) => {
-    try {
-        const userId = req.user.id;
-        const citas = await Cita.findAll({
-            where: { pacienteId: userId },
-            order: [['fechaHora', 'DESC']]
-        });
-        res.json(citas);
-    } catch (error) {
-        console.error("Error al obtener mis citas:", error);
-        res.status(500).json({ message: "Error al obtener tus citas" });
+export const createCitaByPaciente = async (req, res) => {
+  try {
+    const { pacienteId } = req.params;
+    const pacienteIdNumber = Number(pacienteId);
+    if (!Number.isFinite(pacienteIdNumber) || pacienteIdNumber <= 0) {
+      return res.status(400).json({ error: "pacienteId invalido" });
     }
+
+    const body = req.body || {};
+    const fechaHora = parseDate(body.fechaHora ?? body.fecha ?? body.fecha_cita);
+    const motivo = toTrimmedString(body.motivo ?? body.descripcion);
+    const notas = toTrimmedString(body.notas ?? body.nota ?? body.comentarios);
+    const medicoId = Number(body.medicoId ?? req.user?.id);
+    const estado = normalizeEstadoCita(body.estado);
+
+    if (!fechaHora) {
+      return res.status(400).json({ error: "fechaHora requerida" });
+    }
+    if (!motivo) {
+      return res.status(400).json({ error: "motivo requerido" });
+    }
+    if (!Number.isFinite(medicoId) || medicoId <= 0) {
+      return res.status(400).json({ error: "medicoId requerido" });
+    }
+
+    const nueva = await db.Cita.create({
+      fechaHora,
+      motivo,
+      notas,
+      estado,
+      pacienteId: pacienteIdNumber,
+      medicoId,
+    });
+
+    return res.status(201).json(nueva);
+  } catch (error) {
+    console.error("Error creando cita del paciente:", error);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
 };
 
-export const getPendingCitasForMedico = async (req, res) => {
-    try {
-        const medicoId = req.user.id;
-        const citas = await Cita.findAll({
-            where: {
-                medicoId: medicoId,
-                estado: 'Pendiente'
-            },
-            order: [['fechaHora', 'ASC']]
-        });
-        res.json(citas);
-    } catch (error) {
-        console.error("Error al obtener citas pendientes:", error);
-        res.status(500).json({ message: "Error al obtener solicitudes pendientes" });
-    }
+export const getCitasByDoctor = async (req, res) => {
+  try {
+    const { medicoId } = req.params;
+
+    const rows = await db.sequelize.query(
+      `
+      SELECT 
+        id, usuario_id, medico_id, nombre, email, telefono, especialidad,
+        fecha_cita, descripcion, estado, fecha_registro, fecha_actualizacion
+      FROM citas
+      WHERE medico_id = :medicoId
+      ORDER BY fecha_cita DESC
+      `,
+      {
+        replacements: { medicoId: Number(medicoId) },
+        type: db.Sequelize.QueryTypes.SELECT,
+      }
+    );
+
+    return res.json(rows);
+  } catch (error) {
+    console.error("Error obteniendo citas del doctor:", error);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
 };
+
+export const getCitasAmd = async (req, res) => {
+  try {
+    const medicoId = Number(req.query.medicoId);
+    const role = (req.user?.role || "").toString().trim().toUpperCase();
+    const isAdmin = role === "ADMIN" || role === "SUPER_ADMIN";
+    const hasMedicoFilter = !isAdmin && Number.isFinite(medicoId) && medicoId > 0;
+    const rows = await db.sequelize.query(
+      `
+        SELECT
+          c.*,
+          p.nombre AS pacienteNombre,
+          u.nombre AS medicoNombre
+        FROM cita c
+        LEFT JOIN pacientes p ON p.id = c.pacienteId
+        LEFT JOIN users u ON u.id = c.medicoId
+        ${hasMedicoFilter ? "WHERE c.medicoId = :medicoId" : ""}
+        ORDER BY c.fechaHora DESC
+      `,
+      {
+        replacements: hasMedicoFilter ? { medicoId } : {},
+        type: db.Sequelize.QueryTypes.SELECT,
+      }
+    );
+
+    return res.json(rows);
+  } catch (error) {
+    console.error("Error obteniendo citas AMD:", error);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
+const normalizeEstadoPortal = (estado) => {
+  if (!estado) return "pendiente";
+  const value = estado.toString().trim().toLowerCase();
+  if (value === "confirmada" || value === "confirmado") return "confirmada";
+  if (value === "pendiente") return "pendiente";
+  if (value === "cancelada" || value === "cancelado") return "cancelada";
+  return value;
+};
+
+export const getCitasPortal = async (req, res) => {
+  try {
+    const medicoId = Number(req.query.medicoId);
+    const role = (req.user?.role || "").toString().trim().toUpperCase();
+    const isAdmin = role === "ADMIN" || role === "SUPER_ADMIN";
+    const hasMedicoFilter = !isAdmin && Number.isFinite(medicoId) && medicoId > 0;
+    const filtros = [];
+    if (!isAdmin) {
+      filtros.push("LOWER(c.estado) NOT IN ('confirmada', 'confirmado')");
+      if (hasMedicoFilter) {
+        filtros.push("c.medico_id = :medicoId");
+      }
+    }
+    const whereClause = filtros.length > 0 ? `WHERE ${filtros.join(" AND ")}` : "";
+
+    const rows = await db.sequelize.query(
+      `
+        SELECT 
+          c.id,
+          c.usuario_id AS usuarioId,
+          c.medico_id AS medicoId,
+          c.nombre AS pacienteNombre,
+          c.email AS pacienteEmail,
+          c.telefono AS pacienteTelefono,
+          u.nombre AS medicoNombre,
+          c.especialidad,
+          c.fecha_cita AS fechaHora,
+          c.descripcion AS motivo,
+          c.estado,
+          c.fecha_registro AS fechaRegistro
+        FROM citas c
+        LEFT JOIN users u ON u.id = c.medico_id
+        ${whereClause}
+        ORDER BY c.fecha_cita DESC
+      `,
+      {
+        replacements: hasMedicoFilter ? { medicoId } : {},
+        type: db.Sequelize.QueryTypes.SELECT,
+      }
+    );
+
+    return res.json(
+      rows.map((row) => ({
+        ...row,
+        estado: normalizeEstadoPortal(row.estado),
+        source: "portal",
+      }))
+    );
+  } catch (error) {
+    console.error("Error obteniendo citas portal:", error);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
+export const updateCitaPortalEstado = async (req, res) => {
+  try {
+    const { citaId } = req.params;
+    const estado = normalizeEstadoPortal(req.body?.estado);
+
+    if (!estado) {
+      return res.status(400).json({ error: "Estado invalido." });
+    }
+
+    const cita = await db.Citas.findByPk(Number(citaId));
+    if (!cita) {
+      return res.status(404).json({ error: "Cita no encontrada." });
+    }
+
+    const estabaConfirmada = normalizeEstadoPortal(cita.estado) === "confirmada";
+    const debeCrearPaciente = estado === "confirmada" && !estabaConfirmada;
+
+    if (debeCrearPaciente) {
+      await db.sequelize.transaction(async (transaction) => {
+        await cita.update({ estado }, { transaction });
+        await createPacienteAndCitaFromPortal(cita, req.body, transaction);
+      });
+    } else {
+      await cita.update({ estado });
+    }
+
+    return res.json({ ok: true, estado });
+  } catch (error) {
+    console.error("Error actualizando estado de cita portal:", error);
+    const statusCode = error.statusCode || 500;
+    const message = error.statusCode ? error.message : "Error interno del servidor";
+    return res.status(statusCode).json({ error: message });
+  }
+};
+
+const normalizeEstadoAmd = (estado) => {
+  if (!estado) return "Pendiente";
+  const value = estado.toString().trim().toLowerCase();
+  if (value === "confirmada" || value === "confirmado") return "Confirmada";
+  if (value === "pendiente") return "Pendiente";
+  if (value === "cancelada" || value === "cancelado") return "Cancelada";
+  if (value === "completada" || value === "completado") return "Completada";
+  return "Pendiente";
+};
+
+export const createPacienteFromCita = async (req, res) => {
+  try {
+    const { citaId } = req.params;
+    const cita = await db.Citas.findByPk(Number(citaId));
+
+    if (!cita) {
+      return res.status(404).json({ error: "Cita no encontrada." });
+    }
+
+    const { paciente, cita: nuevaCita, reutilizado } = await createPacienteAndCitaFromPortal(cita, req.body);
+    return res.status(201).json({ paciente, cita: nuevaCita, reutilizado });
+  } catch (error) {
+    console.error("Error creando paciente desde cita:", error);
+    const statusCode = error.statusCode || 500;
+    const message = error.statusCode ? error.message : "Error interno del servidor";
+    return res.status(statusCode).json({ error: message });
+  }
+};
+
+const resolveSpecialistField = (role) => {
+  if (!role) return "medicoId";
+  const value = role.toString().trim().toUpperCase();
+  if (value === "NUTRI") return "nutriologoId";
+  if (value === "PSICOLOGO" || value === "PSY") return "psicologoId";
+  if (value === "ENDOCRINOLOGO") return "endocrinologoId";
+  if (value === "PODOLOGO") return "podologoId";
+  return "medicoId";
+};
+
+const buildSpecialistAssignment = async (medicoId, transaction) => {
+  const especialista = await db.User.findByPk(Number(medicoId), { transaction });
+  const field = resolveSpecialistField(especialista?.role);
+  return { [field]: Number(medicoId) };
+};
+
+const createPacienteAndCitaFromPortal = async (cita, body, transaction) => {
+  const payload = { ...(body || {}) };
+  payload.nombre = payload.nombre || payload.paciente || payload.PACIENTE || cita.nombre;
+  payload.email = payload.email || cita.email;
+  payload.telefono = payload.telefono || cita.telefono;
+  payload.usuarioId = payload.usuarioId || cita.medico_id;
+
+  if (!payload.nombre || !payload.usuarioId) {
+    const error = new Error("Faltan campos obligatorios para crear el paciente.");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const especialistaAsignacion = await buildSpecialistAssignment(cita.medico_id, transaction);
+
+  let paciente = null;
+  let reutilizado = false;
+  if (payload.nombre && payload.curp) {
+    paciente = await db.Paciente.findOne({
+      where: { nombre: payload.nombre, curp: payload.curp },
+      transaction,
+    });
+    reutilizado = Boolean(paciente);
+  }
+
+  if (paciente) {
+    await paciente.update(
+      { ...especialistaAsignacion, estatus: "Activo" },
+      { transaction }
+    );
+  } else {
+    paciente = await db.Paciente.create(
+      { ...payload, ...especialistaAsignacion, estatus: "Activo" },
+      { transaction }
+    );
+  }
+
+  const nuevaCita = await db.Cita.create(
+    {
+      pacienteId: paciente.id,
+      medicoId: cita.medico_id,
+      fechaHora: cita.fecha_cita,
+      motivo: cita.descripcion || cita.especialidad || "Cita",
+      notas: cita.descripcion || null,
+      estado: normalizeEstadoAmd(cita.estado),
+    },
+    { transaction }
+  );
+
+  return { paciente, cita: nuevaCita, reutilizado };
+};
+
