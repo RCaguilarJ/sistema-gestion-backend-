@@ -298,6 +298,21 @@ const createPacienteAndCitaFromPortal = async (cita, body, transaction) => {
   payload.email = payload.email || cita.email;
   payload.telefono = payload.telefono || cita.telefono;
   payload.usuarioId = payload.usuarioId || cita.medico_id;
+  payload.curp =
+    payload.curp ||
+    payload.curpPaciente ||
+    payload.curp_paciente ||
+    payload.paciente_curp;
+  if (typeof payload.curp === "string") {
+    const trimmedCurp = payload.curp.trim();
+    payload.curp = trimmedCurp.length > 0 ? trimmedCurp : null;
+  } else if (!payload.curp) {
+    payload.curp = null;
+  }
+  if (!payload.curp) {
+    const baseId = payload.usuarioId || cita.usuario_id || "PORTAL";
+    payload.curp = `TEMP-${baseId}-${Date.now()}`;
+  }
 
   if (!payload.nombre || !payload.usuarioId) {
     const error = new Error("Faltan campos obligatorios para crear el paciente.");
