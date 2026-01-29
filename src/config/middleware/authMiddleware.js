@@ -1,7 +1,6 @@
 import jwt from 'jsonwebtoken';
-// Si usas un archivo de configuración para el secreto, impórtalo aquí.
-// Si lo tienes en process.env, asegúrate de usar la misma variable.
-const JWT_SECRET = process.env.JWT_SECRET || "secreto_temporal_super_seguro"; // Asegúrate de que coincida con authController
+import { getJWTSecret } from "../../constants/config.js";
+const JWT_SECRET = getJWTSecret();
 
 export const verifyToken = (req, res, next) => {
     try {

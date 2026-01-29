@@ -1,6 +1,7 @@
 import db from "../models/index.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { getJWTSecret, JWT_EXPIRES_IN } from "../constants/config.js";
 
 
 
@@ -20,8 +21,8 @@ export const login = async (req, res) => {
 
     const token = jwt.sign(
       { id: user.id, role: user.role, nombre: user.nombre },
-      process.env.JWT_SECRET || "dev_secret",
-      { expiresIn: "8h" }
+      getJWTSecret(),
+      { expiresIn: JWT_EXPIRES_IN }
     );
 
     return res.json({
