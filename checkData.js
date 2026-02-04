@@ -55,25 +55,25 @@ const checkDatabaseData = async () => {
         role: 'ADMIN',
         estatus: 'Activo'
       });
-      console.log('✅ Usuario admin creado: admin@admin.com / admin123');
+      console.log('Usuario admin creado: admin@admin.com / admin123');
     } else {
-      console.log('ℹ️  Usuario admin ya existe.');
+      console.log('Usuario admin ya existe.');
     }
 
     if (totalPacientes === 0 && totalCitas === 0 && totalConsultas === 0) {
-      console.log('⚠️  ADVERTENCIA: No hay datos de pacientes, citas ni consultas');
-      console.log('💡 Esto puede deberse a:');
+      console.log('  ADVERTENCIA: No hay datos de pacientes, citas ni consultas');
+      console.log(' Esto puede deberse a:');
       console.log('   - Base de datos nueva/limpia');
       console.log('   - Se ejecutó algún script de reset');
       console.log('   - Problema de conexión a la BD\n');
       
-      console.log('🔧 SOLUCIÓN:');
+      console.log(' SOLUCIÓN:');
       console.log('   Puedes crear datos de prueba con el administrador desde el frontend');
       console.log('   o usar los scripts de seeding disponibles.');
     }
 
   } catch (error) {
-    console.error('❌ Error al verificar datos:', error);
+    console.error(' Error al verificar datos:', error);
   } finally {
     await db.sequelize.close();
   }

@@ -212,6 +212,24 @@ export const getCitasPortal = async (req, res) => {
   }
 };
 
+export const updateCitaEstado = async (req, res) => {
+  try {
+    const { citaId } = req.params;
+    const estado = normalizeEstadoAmd(req.body?.estado);
+
+    const cita = await db.Cita.findByPk(Number(citaId));
+    if (!cita) {
+      return res.status(404).json({ error: "Cita no encontrada." });
+    }
+
+    await cita.update({ estado });
+    return res.json({ ok: true, estado });
+  } catch (error) {
+    console.error("Error actualizando estado de cita AMD:", error);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
 export const updateCitaPortalEstado = async (req, res) => {
   try {
     const { citaId } = req.params;

@@ -4,6 +4,7 @@ import {
   getCitasByDoctor,
   getCitasAmd,
   getCitasPortal,
+  updateCitaEstado,
   updateCitaPortalEstado,
   createPacienteFromCita,
   getCitasByPacienteId,
@@ -18,6 +19,7 @@ router.get("/doctor/:medicoId", getCitasByDoctor);
 router.get("/paciente/:pacienteId", getCitasByPacienteId);
 router.get("/amd", getCitasAmd);
 router.get("/portal", getCitasPortal);
+router.put("/:citaId/estado", updateCitaEstado);
 router.put("/portal/:citaId/estado", updateCitaPortalEstado);
 router.post("/portal/:citaId/crear-paciente", createPacienteFromCita);
 router.post("/paciente/:pacienteId", createCitaByPaciente);

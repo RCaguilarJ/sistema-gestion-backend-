@@ -3,7 +3,7 @@ import db from './src/models/index.js';
 
 const createUsers = async () => {
   try {
-    console.log('🚀 Creando usuarios de prueba...');
+    console.log(' Creando usuarios de prueba...');
     
     const User = db.User;
     
@@ -48,20 +48,20 @@ const createUsers = async () => {
           password: hashedPassword
         });
         
-        console.log(`✅ Usuario creado: ${userData.email} (${userData.role})`);
+        console.log(` Usuario creado: ${userData.email} (${userData.role})`);
       } else {
-        console.log(`⚠️  Usuario ya existe: ${userData.email}`);
+        console.log(`  Usuario ya existe: ${userData.email}`);
       }
     }
 
-    console.log('\n🎉 ¡Proceso completado!');
+    console.log('\n ¡Proceso completado!');
     console.log('\nUsuarios de prueba:');
     usuarios.forEach(u => {
       console.log(`- ${u.email} / password123 (${u.role})`);
     });
 
   } catch (error) {
-    console.error('❌ Error:', error);
+    console.error(' Error:', error);
   } finally {
     await db.sequelize.close();
   }

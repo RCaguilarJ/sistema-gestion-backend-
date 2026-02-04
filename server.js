@@ -15,36 +15,46 @@ dotenv.config();
 
 const app = express();
 
-const allowedOrigins = (process.env.FRONTEND_URLS || "")
-  .split(",")
+const parseAllowedOrigins = (value) =>
+  (value || "")
+  .split(/[\n,;]+/)
   .map((o) => o.trim())
   .filter(Boolean);
+
+const allowedOrigins = parseAllowedOrigins(
+  process.env.FRONTEND_URLS || process.env.APP_URL || ""
+);
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.length === 0) {
+      if (process.env.NODE_ENV !== "production") {
+        return callback(null, true);
+      }
+      return callback(new Error("CORS no configurado"), false);
+    }
+
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error("Origen no permitido por CORS"), false);
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+};
 
 // Body parser
 app.use(express.json());
 
 // CORS PRIMERO (antes de rutas)
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.length === 0) {
-        return callback(new Error("CORS no configurado"), false);
-      }
-      if (allowedOrigins.includes(origin)) return callback(null, true);
-      return callback(new Error("Origen no permitido por CORS"), false);
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
+app.use(cors(corsOptions));
 
 // Archivos subidos
 app.use("/uploads", express.static("uploads"));
 
 // Preflight
-app.options("*", cors());
+app.options("*", cors(corsOptions));
 
 // Rutas
 app.use("/api/auth", authRoutes);
@@ -64,4 +74,3 @@ const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
 });
-
