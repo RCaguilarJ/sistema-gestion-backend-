@@ -15,7 +15,7 @@ const checkAdminUsers = async () => {
       attributes: ['id', 'nombre', 'email', 'role', 'estatus', 'createdAt']
     });
 
-    console.log('👤 Usuarios Admin encontrados:');
+    console.log('Usuarios Admin encontrados:');
     console.log('================================');
     
     if (adminUsers.length === 0) {

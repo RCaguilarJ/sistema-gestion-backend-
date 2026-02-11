@@ -5,7 +5,7 @@ const checkDatabaseData = async () => {
   try {
     const { Paciente, Cita, Consulta, User } = db;
     
-    console.log('📊 ESTADO ACTUAL DE LA BASE DE DATOS');
+    console.log(' ESTADO ACTUAL DE LA BASE DE DATOS');
     console.log('=====================================\n');
 
     // Contar usuarios
@@ -14,7 +14,7 @@ const checkDatabaseData = async () => {
     const doctorUsers = await User.count({ where: { role: 'Doctor' } });
     const nutriUsers = await User.count({ where: { role: { [db.Sequelize.Op.like]: '%nutri%' } } });
     
-    console.log('👥 USUARIOS:');
+    console.log(' USUARIOS:');
     console.log(`   Total: ${totalUsers}`);
     console.log(`   Administradores: ${adminUsers}`);
     console.log(`   Doctores: ${doctorUsers}`);
@@ -24,7 +24,7 @@ const checkDatabaseData = async () => {
     const totalPacientes = await Paciente.count();
     const pacientesActivos = await Paciente.count({ where: { estatus: 'Activo' } });
     
-    console.log('🏥 PACIENTES:');
+    console.log('PACIENTES:');
     console.log(`   Total: ${totalPacientes}`);
     console.log(`   Activos: ${pacientesActivos}\n`);
 
@@ -32,14 +32,14 @@ const checkDatabaseData = async () => {
     const totalCitas = await Cita.count();
     const citasPendientes = await Cita.count({ where: { estado: 'Pendiente' } });
     
-    console.log('📅 CITAS:');
+    console.log('CITAS:');
     console.log(`   Total: ${totalCitas}`);
     console.log(`   Pendientes: ${citasPendientes}\n`);
 
     // Contar consultas
     const totalConsultas = await Consulta.count();
     
-    console.log('📋 CONSULTAS:');
+    console.log('CONSULTAS:');
     console.log(`   Total: ${totalConsultas}\n`);
 
     // Crear usuario admin si no existe

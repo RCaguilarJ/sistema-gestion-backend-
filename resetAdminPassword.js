@@ -21,7 +21,7 @@ const resetAdminPassword = async () => {
         role: 'ADMIN',
         estatus: 'Activo'
       });
-      console.log('✅ Usuario admin creado: admin@admin.com / admin123');
+      console.log(' Usuario admin creado: admin@admin.com / admin123');
     } else {
       console.log('Usuario encontrado. Generando nueva contraseña...');
       const hashedPassword = await bcrypt.hash(newPassword, 10);

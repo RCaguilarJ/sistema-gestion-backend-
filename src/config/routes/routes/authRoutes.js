@@ -6,12 +6,13 @@ import { createUser } from "../../../controllers/userController.js";
 const router = express.Router();
 
 // Ruta para registrar un nuevo usuario
-// POST https://back.diabetesjalisco.org/api/auth/register
+// POST https://amdj.desingsgdl.app/api/auth/register
 router.post("/register", createUser);
 
 // Ruta para iniciar sesión
-// POST https://back.diabetesjalisco.org/api/auth/login
+// POST https://amdj.desingsgdl.app/api/auth/login
 router.post("/login", login);
 
 export default router;
     
+

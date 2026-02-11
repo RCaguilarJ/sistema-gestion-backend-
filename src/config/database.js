@@ -1,7 +1,15 @@
 import { Sequelize } from "sequelize";
 import dotenv from "dotenv";
 
-dotenv.config();
+// Carga condicional de variables de entorno
+// Debe estar aquí porque los imports de ES modules se ejecutan
+// antes que el código top-level de server.js
+if (process.env.NODE_ENV === "production") {
+  dotenv.config({ path: ".env.production" });
+} else {
+  dotenv.config({ path: ".env.local" });
+}
+dotenv.config(); // fallback a .env (no sobreescribe)
 
 const sequelize = new Sequelize(
   process.env.DB_NAME, 
