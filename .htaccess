@@ -1,0 +1,31 @@
+﻿# 1. Compresión (Mantenemos tu configuración)
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json
+</IfModule>
+
+# 2. Caché de estáticos (Mantenemos tu configuración)
+<IfModule mod_headers.c>
+  <FilesMatch "\.(js|css|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+</IfModule>
+
+# 3. Reglas de Redirección y Proxy
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # --- CRÍTICO: Proxy para el Backend ---
+  # Redirige todo lo que empiece con /api hacia el puerto 4000 donde corre Node.js
+  # El flag [P] indica Proxy, [L] indica que es la última regla si coincide
+  RewriteRule ^api/(.*) http://localhost:4000/api/$1 [P,L]
+
+  # --- SPA Routing ---
+  # Si no es un archivo real, ni un directorio, ni empieza con /api o /uploads
+  # envía la petición al index.html de React
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_URI} !^/api(/|$)
+  RewriteCond %{REQUEST_URI} !^/uploads(/|$)
+  RewriteRule ^ index.html [L]
+</IfModule>
