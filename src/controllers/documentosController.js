@@ -4,7 +4,10 @@ import db from "../models/index.js";
 
 const UPLOADS_DIR = path.resolve("uploads");
 
-const buildPublicUrl = (filename) => `/uploads/${filename}`;
+const buildPublicUrl = (req, filename) => {
+  const baseUrl = `${req.protocol}://${req.get("host")}`;
+  return `${baseUrl}/uploads/${filename}`;
+};
 
 export const uploadDocumento = async (req, res) => {
   try {
@@ -27,7 +30,7 @@ export const uploadDocumento = async (req, res) => {
       categoria: categoria || null,
       cargadoPor: req.user?.nombre || null,
       tamano: req.file.size,
-      url: buildPublicUrl(safeFilename),
+      url: buildPublicUrl(req, safeFilename),
       pacienteId,
     });
 
@@ -54,7 +57,15 @@ export const getDocumentos = async (req, res) => {
       where: { pacienteId },
       order: [["createdAt", "DESC"]],
     });
-    return res.json(documentos);
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const normalized = documentos.map((d) => {
+      const json = d.toJSON();
+      if (json.url && !json.url.startsWith("http")) {
+        json.url = `${baseUrl}${json.url.startsWith("/") ? "" : "/"}${json.url}`;
+      }
+      return json;
+    });
+    return res.json(normalized);
   } catch (error) {
     console.error("Error al obtener documentos:", error);
     return res.status(500).json({ message: "Error al obtener documentos" });

@@ -124,6 +124,104 @@ const parseDateTime = (value) => {
   return parsed.toISOString();
 };
 
+const normalizeRole = (value) => {
+  if (!value) return null;
+  return value
+    .toString()
+    .trim()
+    .toUpperCase()
+    .replace("Ó", "O")
+    .replace("Í", "I")
+    .replace("Á", "A")
+    .replace("É", "E")
+    .replace("Ú", "U");
+};
+
+const roleToEspecialistaField = (role) => {
+  const normalized = normalizeRole(role);
+  if (normalized === "DOCTOR") return "medicoId";
+  if (normalized === "NUTRI") return "nutriologoId";
+  if (normalized === "PSICOLOGO" || normalized === "PSY") return "psicologoId";
+  if (normalized === "ENDOCRINOLOGO") return "endocrinologoId";
+  if (normalized === "PODOLOGO") return "podologoId";
+  return null;
+};
+
+const buildEspecialistaDefaults = (req) => {
+  const defaults = {};
+  const role = normalizeRole(req.body?.especialistaRole);
+  const idFromRole = parseInteger(req.body?.especialistaId);
+  if (role && idFromRole) {
+    const field = roleToEspecialistaField(role);
+    if (field) defaults[field] = idFromRole;
+  }
+
+  const medicoId = parseInteger(req.body?.medicoId);
+  const nutriologoId = parseInteger(req.body?.nutriologoId);
+  const psicologoId = parseInteger(req.body?.psicologoId);
+  const endocrinologoId = parseInteger(req.body?.endocrinologoId);
+  const podologoId = parseInteger(req.body?.podologoId);
+
+  if (medicoId) defaults.medicoId = medicoId;
+  if (nutriologoId) defaults.nutriologoId = nutriologoId;
+  if (psicologoId) defaults.psicologoId = psicologoId;
+  if (endocrinologoId) defaults.endocrinologoId = endocrinologoId;
+  if (podologoId) defaults.podologoId = podologoId;
+
+  return defaults;
+};
+
+const applyEspecialistaDefaults = (paciente, defaults) => {
+  if (!paciente.medicoId && defaults.medicoId) paciente.medicoId = defaults.medicoId;
+  if (!paciente.nutriologoId && defaults.nutriologoId) paciente.nutriologoId = defaults.nutriologoId;
+  if (!paciente.psicologoId && defaults.psicologoId) paciente.psicologoId = defaults.psicologoId;
+  if (!paciente.endocrinologoId && defaults.endocrinologoId) paciente.endocrinologoId = defaults.endocrinologoId;
+  if (!paciente.podologoId && defaults.podologoId) paciente.podologoId = defaults.podologoId;
+};
+
+const assignByUserRole = (paciente, user) => {
+  const role = normalizeRole(user?.role);
+  const creatorId = user?.id;
+  if (!creatorId) return;
+  const field = roleToEspecialistaField(role);
+  if (field && !paciente[field]) {
+    paciente[field] = creatorId;
+  }
+};
+
+const collectEspecialistaIds = (pacientes) => {
+  const ids = new Set();
+  pacientes.forEach((p) => {
+    [p.medicoId, p.nutriologoId, p.psicologoId, p.endocrinologoId, p.podologoId]
+      .filter((value) => Number.isFinite(value) && value > 0)
+      .forEach((value) => ids.add(value));
+  });
+  return Array.from(ids);
+};
+
+const findMissingEspecialistaIds = async (pacientes) => {
+  const ids = collectEspecialistaIds(pacientes);
+  if (ids.length === 0) return [];
+  const users = await db.User.findAll({
+    where: { id: ids },
+    attributes: ["id"],
+  });
+  const existing = new Set(users.map((u) => u.id));
+  return ids.filter((id) => !existing.has(id));
+};
+
+const findExistingCurps = async (pacientes) => {
+  const curps = pacientes
+    .map((p) => (p.curp || "").toString().trim())
+    .filter((value) => value.length > 0);
+  if (curps.length === 0) return new Set();
+  const rows = await db.Paciente.findAll({
+    where: { curp: curps },
+    attributes: ["curp"],
+  });
+  return new Set(rows.map((r) => r.curp));
+};
+
 const isValidEmail = (email) => {
   if (!email) return true;
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -216,12 +314,26 @@ const validatePacienteRow = (paciente, rowNumber) => {
   if (paciente.riesgo && !ALLOWED_RIESGO.has(paciente.riesgo)) {
     errors.push({ row: rowNumber, field: "riesgo", message: "riesgo invalido" });
   }
+  if (
+    !paciente.medicoId &&
+    !paciente.nutriologoId &&
+    !paciente.psicologoId &&
+    !paciente.endocrinologoId &&
+    !paciente.podologoId
+  ) {
+    errors.push({
+      row: rowNumber,
+      field: "especialista",
+      message: "especialista requerido (selecciona uno en el importador o agrega ID en el Excel)",
+    });
+  }
 
   return errors;
 };
 
 const parseExcelRows = (filePath) => {
-  const workbook = XLSX.readFile(filePath, { cellDates: true });
+  const buffer = fs.readFileSync(filePath);
+  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
   const sheetName = workbook.SheetNames[0];
   const sheet = workbook.Sheets[sheetName];
   if (!sheet) return [];
@@ -337,6 +449,16 @@ export const deletePaciente = async (req, res) => {
     const row = await db.Paciente.findByPk(id);
     if (!row) return res.status(404).json({ error: "Paciente no encontrado" });
 
+    const role = normalizeRole(req.user?.role);
+    const isAdminRole = role === "ADMIN" || role === "SUPER_ADMIN";
+    if (!isAdminRole) {
+      const field = roleToEspecialistaField(role);
+      const userId = req.user?.id;
+      if (!field || !userId || row[field] !== userId) {
+        return res.status(403).json({ error: "No autorizado para eliminar este paciente" });
+      }
+    }
+
     await row.destroy();
     return res.json({ ok: true });
   } catch (error) {
@@ -395,11 +517,14 @@ export const validateImportPacientes = async (req, res) => {
     }
 
     const defaultUsuarioId = parseInteger(req.body?.usuarioId || req.user?.id);
+    const especialistaDefaults = buildEspecialistaDefaults(req);
     const validRows = [];
     const errors = [];
 
     rows.forEach((row, index) => {
       const paciente = buildPacienteFromRow(row, defaultUsuarioId);
+      applyEspecialistaDefaults(paciente, especialistaDefaults);
+      assignByUserRole(paciente, req.user);
       const rowNumber = index + 2;
       const rowErrors = validatePacienteRow(paciente, rowNumber);
       if (rowErrors.length) {
@@ -408,6 +533,26 @@ export const validateImportPacientes = async (req, res) => {
         validRows.push(paciente);
       }
     });
+
+    const missingIds = await findMissingEspecialistaIds(validRows);
+    if (missingIds.length) {
+      errors.push({
+        row: null,
+        field: "especialistaId",
+        message: `IDs de especialista no existentes en usuarios: ${missingIds.join(", ")}`,
+      });
+    }
+
+    const existingCurps = await findExistingCurps(validRows);
+    if (existingCurps.size > 0) {
+      existingCurps.forEach((curp) => {
+        errors.push({
+          row: null,
+          field: "curp",
+          message: `CURP ya registrada: ${curp}`,
+        });
+      });
+    }
 
     return res.json({
       total: rows.length,
@@ -442,11 +587,14 @@ export const importPacientesFromExcel = async (req, res) => {
     }
 
     const defaultUsuarioId = parseInteger(req.body?.usuarioId || req.user?.id);
+    const especialistaDefaults = buildEspecialistaDefaults(req);
     const pacientes = [];
     const errors = [];
 
     rows.forEach((row, index) => {
       const paciente = buildPacienteFromRow(row, defaultUsuarioId);
+      applyEspecialistaDefaults(paciente, especialistaDefaults);
+      assignByUserRole(paciente, req.user);
       const rowNumber = index + 2;
       const rowErrors = validatePacienteRow(paciente, rowNumber);
       if (rowErrors.length) {
@@ -463,6 +611,22 @@ export const importPacientesFromExcel = async (req, res) => {
         validos: pacientes.length,
         invalidos: rows.length - pacientes.length,
         errors,
+      });
+    }
+
+    const missingIds = await findMissingEspecialistaIds(pacientes);
+    if (missingIds.length) {
+      return res.status(400).json({
+        error: "ids de especialista invalidos",
+        message: `IDs de especialista no existentes en usuarios: ${missingIds.join(", ")}`,
+      });
+    }
+
+    const existingCurps = await findExistingCurps(pacientes);
+    if (existingCurps.size > 0) {
+      return res.status(400).json({
+        error: "curps duplicados",
+        message: `CURP ya registradas: ${Array.from(existingCurps).join(", ")}`,
       });
     }
 
