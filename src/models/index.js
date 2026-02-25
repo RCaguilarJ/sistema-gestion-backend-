@@ -9,6 +9,11 @@ import defineCitasModel from "./Citas.js"; // ✅ nuevo: tabla `citas` (plural)
 import Nutricion from "./Nutricion.js";
 import PlanAlimentacion from "./PlanAlimentacion.js";
 import Documento from "./Documento.js";
+import PsicologiaSesion from "./PsicologiaSesion.js";
+import PsicologiaEvaluacion from "./PsicologiaEvaluacion.js";
+import PsicologiaObjetivo from "./PsicologiaObjetivo.js";
+import PsicologiaEstrategia from "./PsicologiaEstrategia.js";
+import PsicologiaNota from "./PsicologiaNota.js";
 
 // ✅ 1) db DEBE existir antes de usarlo
 const db = {};
@@ -25,6 +30,11 @@ db.Citas = defineCitasModel(sequelize, Sequelize); // ✅ tabla `citas` (plural)
 db.Nutricion = Nutricion;
 db.PlanAlimentacion = PlanAlimentacion;
 db.Documento = Documento;
+db.PsicologiaSesion = PsicologiaSesion;
+db.PsicologiaEvaluacion = PsicologiaEvaluacion;
+db.PsicologiaObjetivo = PsicologiaObjetivo;
+db.PsicologiaEstrategia = PsicologiaEstrategia;
+db.PsicologiaNota = PsicologiaNota;
 
 // ✅ 3) Relaciones (si aplican)
 // (tus relaciones actuales están bien)

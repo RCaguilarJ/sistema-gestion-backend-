@@ -10,6 +10,7 @@ import nutricionRoutes from "./src/routes/nutricionRoutes.js";
 import documentosRoutes from "./src/routes/documentosRoutes.js";
 import userRoutes from "./src/config/routes/routes/userRoutes.js";
 import notificationRoutes from "./src/routes/notificationRoutes.js";
+import psicologiaRoutes from "./src/routes/psicologiaRoutes.js";
 
 // ============================================================
 // CARGA DE VARIABLES DE ENTORNO (condicional)
@@ -85,6 +86,7 @@ app.use("/api/citas", citaRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/consultas", consultaRoutes);
 app.use("/api/nutricion", nutricionRoutes);
+app.use("/api/psicologia", psicologiaRoutes);
 app.use("/api/documentos", documentosRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/notifications", notificationRoutes);
