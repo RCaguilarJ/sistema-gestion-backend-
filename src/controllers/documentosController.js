@@ -4,10 +4,19 @@ import db from "../models/index.js";
 
 const UPLOADS_DIR = path.resolve("uploads");
 
-const buildPublicUrl = (req, filename) => {
-  const baseUrl = `${req.protocol}://${req.get("host")}`;
-  return `${baseUrl}/uploads/${filename}`;
+const getPublicBaseUrl = (req) => {
+  const envBase =
+    process.env.PUBLIC_BASE_URL ||
+    process.env.PUBLIC_BACKEND_URL ||
+    process.env.BACKEND_URL ||
+    process.env.API_URL;
+  if (envBase) {
+    return envBase.replace(/\/+$/, "");
+  }
+  return `${req.protocol}://${req.get("host")}`;
 };
+
+const buildPublicPath = (filename) => `/uploads/${filename}`;
 
 export const uploadDocumento = async (req, res) => {
   try {
@@ -30,7 +39,7 @@ export const uploadDocumento = async (req, res) => {
       categoria: categoria || null,
       cargadoPor: req.user?.nombre || null,
       tamano: req.file.size,
-      url: buildPublicUrl(req, safeFilename),
+      url: buildPublicPath(safeFilename),
       pacienteId,
     });
 
@@ -57,12 +66,14 @@ export const getDocumentos = async (req, res) => {
       where: { pacienteId },
       order: [["createdAt", "DESC"]],
     });
-    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const baseUrl = getPublicBaseUrl(req);
     const normalized = documentos.map((d) => {
       const json = d.toJSON();
-      if (json.url && !json.url.startsWith("http")) {
-        json.url = `${baseUrl}${json.url.startsWith("/") ? "" : "/"}${json.url}`;
+      const filename = path.basename(json.url || "");
+      if (filename) {
+        json.url = `${baseUrl}/uploads/${filename}`;
       }
+      json.downloadUrl = `${baseUrl}/api/documentos/${json.id}/descargar`;
       return json;
     });
     return res.json(normalized);
@@ -97,5 +108,31 @@ export const deleteDocumento = async (req, res) => {
   } catch (error) {
     console.error("Error al eliminar documento:", error);
     return res.status(500).json({ message: "Error al eliminar documento" });
+  }
+};
+
+export const downloadDocumento = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const Documento = db.Documento;
+    if (!Documento) {
+      return res.status(500).json({ message: "Modelo Documento no disponible" });
+    }
+
+    const doc = await Documento.findByPk(id);
+    if (!doc) {
+      return res.status(404).json({ message: "Documento no encontrado" });
+    }
+
+    const filename = path.basename(doc.url || "");
+    if (!filename) {
+      return res.status(400).json({ message: "Documento sin archivo asociado" });
+    }
+
+    const filePath = path.join(UPLOADS_DIR, filename);
+    return res.download(filePath, doc.nombre || filename);
+  } catch (error) {
+    console.error("Error al descargar documento:", error);
+    return res.status(500).json({ message: "Error al descargar documento" });
   }
 };
