@@ -1,7 +1,34 @@
 import db from '../models/index.js';
 import bcrypt from 'bcryptjs';
+import { Op } from 'sequelize';
+import { ROLES, ADMIN_ROLES, MEDICAL_ROLES } from '../constants/roles.js';
 
 const User = db.User;
+
+const SPECIALIST_ROLES = [
+    ROLES.DOCTOR,
+    ROLES.NUTRI,
+    ROLES.ENDOCRINOLOGO,
+    ROLES.PODOLOGO,
+    ROLES.PSICOLOGO,
+    ROLES.PSY
+];
+
+const normalizeRole = (value) => {
+    if (!value) return '';
+    return value
+        .toString()
+        .trim()
+        .toUpperCase()
+        .replace('Á', 'A')
+        .replace('É', 'E')
+        .replace('Í', 'I')
+        .replace('Ó', 'O')
+        .replace('Ú', 'U');
+};
+
+const isAdminRole = (role) => ADMIN_ROLES.includes(role);
+const isMedicalRole = (role) => MEDICAL_ROLES.includes(role);
 
 export const getAllUsers = async (req, res) => {
     try {
@@ -90,5 +117,44 @@ export const deleteUser = async (req, res) => {
     } catch (error) {
         console.error("❌ Error eliminando usuario:", error);
         res.status(500).json({ message: "Error al eliminar usuario" });
+    }
+};
+
+// Obtener especialistas filtrados por rol
+// - ADMIN/SUPER_ADMIN: puede ver todos o filtrar por ?role=
+// - Especialistas: solo pueden ver a sus companeros del mismo rol
+export const getEspecialistas = async (req, res) => {
+    try {
+        const requesterRole = normalizeRole(req.user?.role);
+        if (!requesterRole) {
+            return res.status(403).json({ message: 'Usuario no autenticado.' });
+        }
+
+        let targetRole = normalizeRole(req.query?.role);
+
+        if (isAdminRole(requesterRole)) {
+            if (targetRole && !SPECIALIST_ROLES.includes(targetRole)) {
+                return res.status(400).json({ message: 'Rol de especialista invalido.' });
+            }
+        } else if (isMedicalRole(requesterRole)) {
+            targetRole = requesterRole;
+        } else {
+            return res.status(403).json({ message: 'No tienes permisos para ver especialistas.' });
+        }
+
+        const where = {
+            estatus: 'Activo',
+            role: targetRole ? targetRole : { [Op.in]: SPECIALIST_ROLES }
+        };
+
+        const especialistas = await User.findAll({
+            where,
+            attributes: ['id', 'nombre', 'email', 'username', 'role', 'estatus']
+        });
+
+        res.json({ especialistas });
+    } catch (error) {
+        console.error('Error obteniendo especialistas:', error);
+        res.status(500).json({ message: 'Error al cargar especialistas' });
     }
 };

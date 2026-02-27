@@ -1,8 +1,11 @@
 import express from "express";
-import { getAllUsers, createUser, updateUser, deleteUser } from "../../../controllers/userController.js";
+import { getAllUsers, getEspecialistas, createUser, updateUser, deleteUser } from "../../../controllers/userController.js";
 import { authenticate, authorizeRoles } from "../../../middleware/authMiddleware.js";
 
 const router = express.Router();
+
+// Ruta: GET /api/users/especialistas (especialistas y admins)
+router.get("/especialistas", authenticate, getEspecialistas);
 
 // Ruta: GET /api/users (solo ADMIN puede acceder)
 router.get("/", authenticate, authorizeRoles("ADMIN"), getAllUsers);
