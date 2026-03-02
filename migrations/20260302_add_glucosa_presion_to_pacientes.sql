@@ -1,0 +1,3 @@
+ALTER TABLE pacientes
+  ADD COLUMN glucosa DECIMAL(6,2) NULL,
+  ADD COLUMN presionArterial VARCHAR(20) NULL;

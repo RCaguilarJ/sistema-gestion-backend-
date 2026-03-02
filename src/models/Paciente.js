@@ -48,6 +48,8 @@ export default (sequelize) => {
     },
     pesoKg: { type: DataTypes.DECIMAL(5, 1) },
     hba1c: { type: DataTypes.DECIMAL(4, 1) },
+    glucosa: { type: DataTypes.DECIMAL(6, 2) },
+    presionArterial: { type: DataTypes.STRING(20) },
     imc: { type: DataTypes.DECIMAL(4, 1) },
     tipoDiabetes: { type: DataTypes.ENUM('Tipo 1', 'Tipo 2', 'Gestacional', 'Otro') },
     fechaDiagnostico: { type: DataTypes.DATEONLY },

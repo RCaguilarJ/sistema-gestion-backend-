@@ -31,6 +31,15 @@ const normalizeEstadoCita = (estado) => {
   return "Pendiente";
 };
 
+const normalizeEstadoPortal = (estado) => {
+  if (!estado) return "pendiente";
+  const value = estado.toString().trim().toLowerCase();
+  if (value === "confirmada" || value === "confirmado") return "confirmada";
+  if (value === "pendiente") return "pendiente";
+  if (value === "cancelada" || value === "cancelado") return "cancelada";
+  return value;
+};
+
 export const getCitasByPacienteId = async (req, res) => {
   try {
     const { pacienteId } = req.params;
@@ -44,7 +53,47 @@ export const getCitasByPacienteId = async (req, res) => {
       order: [["fechaHora", "DESC"]],
     });
 
-    return res.json(rows);
+    const citasApp = rows.map((row) => ({
+      ...row.get({ plain: true }),
+      source: "app",
+    }));
+
+    const paciente = await db.Paciente.findByPk(pacienteIdNumber);
+    let citasPortal = [];
+    if (paciente) {
+      const orFilters = [];
+      if (paciente.email) orFilters.push({ email: paciente.email });
+      if (paciente.telefono) orFilters.push({ telefono: paciente.telefono });
+      if (paciente.celular) orFilters.push({ telefono: paciente.celular });
+      if (paciente.nombre) orFilters.push({ nombre: paciente.nombre });
+
+      if (orFilters.length > 0) {
+        const portalRows = await db.Citas.findAll({
+          where: { [db.Sequelize.Op.or]: orFilters },
+          order: [["fecha_cita", "DESC"]],
+        });
+        citasPortal = portalRows.map((row) => ({
+          id: `portal-${row.id}`,
+          portalId: row.id,
+          fechaHora: row.fecha_cita,
+          motivo: row.descripcion || row.especialidad || "Cita",
+          notas: row.descripcion || null,
+          estado: normalizeEstadoCita(row.estado),
+          pacienteId: pacienteIdNumber,
+          medicoId: row.medico_id,
+          medicoNombre: row.medicoNombre,
+          source: "portal",
+        }));
+      }
+    }
+
+    const merged = [...citasApp, ...citasPortal].sort((a, b) => {
+      const aTime = a.fechaHora ? new Date(a.fechaHora).getTime() : 0;
+      const bTime = b.fechaHora ? new Date(b.fechaHora).getTime() : 0;
+      return bTime - aTime;
+    });
+
+    return res.json(merged);
   } catch (error) {
     console.error("Error obteniendo citas del paciente:", error);
     return res.status(500).json({ error: "Error interno del servidor" });
@@ -147,15 +196,6 @@ export const getCitasAmd = async (req, res) => {
     console.error("Error obteniendo citas AMD:", error);
     return res.status(500).json({ error: "Error interno del servidor" });
   }
-};
-
-const normalizeEstadoPortal = (estado) => {
-  if (!estado) return "pendiente";
-  const value = estado.toString().trim().toLowerCase();
-  if (value === "confirmada" || value === "confirmado") return "confirmada";
-  if (value === "pendiente") return "pendiente";
-  if (value === "cancelada" || value === "cancelado") return "cancelada";
-  return value;
 };
 
 export const getCitasPortal = async (req, res) => {

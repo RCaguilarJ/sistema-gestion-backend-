@@ -95,8 +95,32 @@ export const updateUser = async (req, res) => {
         if (!user) {
             return res.status(404).json({ message: "Usuario no encontrado" });
         }
-        // Excluir password de actualización directa
-        const { password, ...updateFields } = req.body;
+        const requesterRole = normalizeRole(req.user?.role);
+        const isAdminRequester = isAdminRole(requesterRole);
+
+        // Excluir password de actualización directa (se procesa debajo si aplica)
+        const { password, role, ...updateFields } = req.body;
+
+        if (role) {
+            updateFields.role = role
+                .toString()
+                .trim()
+                .toUpperCase()
+                .replace('Ó', 'O')
+                .replace('Í', 'I')
+                .replace('Á', 'A')
+                .replace('É', 'E')
+                .replace('Ú', 'U');
+        }
+
+        if (password !== undefined && password !== null && String(password).trim() !== "") {
+            if (!isAdminRequester) {
+                return res.status(403).json({ message: "No autorizado para cambiar contraseña" });
+            }
+            const hashedPassword = await bcrypt.hash(password, 10);
+            updateFields.password = hashedPassword;
+        }
+
         await user.update(updateFields);
         res.json({ message: "Usuario actualizado correctamente", user });
     } catch (error) {

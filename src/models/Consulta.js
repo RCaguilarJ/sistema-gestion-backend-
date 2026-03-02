@@ -7,6 +7,8 @@ const Consulta = sequelize.define("Consulta", {
   tratamiento: { type: DataTypes.TEXT, allowNull: true },
   pesoKg: { type: DataTypes.FLOAT, allowNull: true },
   hba1c: { type: DataTypes.FLOAT, allowNull: true },
+  glucosa: { type: DataTypes.FLOAT, allowNull: true },
+  presionArterial: { type: DataTypes.STRING, allowNull: true },
   fechaConsulta: { type: DataTypes.DATE, allowNull: false },
   pacienteId: { type: DataTypes.INTEGER, allowNull: false },
 }, { tableName: "consultas" });

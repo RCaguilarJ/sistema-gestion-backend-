@@ -38,6 +38,8 @@ const buildConsultaPayload = (raw, pacienteId) => {
   const tratamiento = toTrimmedString(raw.tratamiento ?? raw.treatment);
   const pesoKg = parseNumber(raw.pesoKg ?? raw.peso ?? raw.peso_kg);
   const hba1c = parseNumber(raw.hba1c ?? raw.hba1cPercent ?? raw.hba1cValue);
+  const glucosa = parseNumber(raw.glucosa ?? raw.glucosaMg ?? raw.glucosa_mg);
+  const presionArterial = toTrimmedString(raw.presionArterial ?? raw.presion ?? raw.presion_arterial);
   const fechaConsulta = parseDate(raw.fechaConsulta ?? raw.fecha ?? raw.fecha_consulta);
 
   return {
@@ -46,6 +48,8 @@ const buildConsultaPayload = (raw, pacienteId) => {
     tratamiento,
     pesoKg,
     hba1c,
+    glucosa,
+    presionArterial,
     fechaConsulta,
     pacienteId,
   };
@@ -120,6 +124,8 @@ export const createConsulta = async (req, res) => {
       const updates = {};
       if (payload.hba1c !== null) updates.hba1c = payload.hba1c;
       if (payload.pesoKg !== null) updates.pesoKg = payload.pesoKg;
+      if (payload.glucosa !== null) updates.glucosa = payload.glucosa;
+      if (payload.presionArterial !== null) updates.presionArterial = payload.presionArterial;
       if (payload.fechaConsulta) updates.ultimaVisita = payload.fechaConsulta;
 
       if (payload.pesoKg !== null) {

@@ -452,11 +452,7 @@ export const deletePaciente = async (req, res) => {
     const role = normalizeRole(req.user?.role);
     const isAdminRole = role === "ADMIN" || role === "SUPER_ADMIN";
     if (!isAdminRole) {
-      const field = roleToEspecialistaField(role);
-      const userId = req.user?.id;
-      if (!field || !userId || row[field] !== userId) {
-        return res.status(403).json({ error: "No autorizado para eliminar este paciente" });
-      }
+      return res.status(403).json({ error: "No autorizado para eliminar este paciente" });
     }
 
     await row.destroy();
