@@ -2,7 +2,8 @@ import { Router } from "express";
 import fs from "fs";
 import multer from "multer";
 import path from "path";
-import { authenticate } from "../../../middleware/authMiddleware.js";
+import { authenticate, forbidRoles } from "../../../middleware/authMiddleware.js";
+import { ROLES } from "../../../constants/roles.js";
 import {
   getAllPacientes,
   getPacienteById,
@@ -36,14 +37,14 @@ const upload = multer({ storage });
 router.use(authenticate);
 
 // IMPORTANTE: rutas especificas ANTES de "/:id"
-router.post("/importar/validar", upload.single("archivo"), validateImportPacientes);
-router.post("/importar", upload.single("archivo"), importPacientesFromExcel);
+router.post("/importar/validar", forbidRoles(ROLES.RECEPCION), upload.single("archivo"), validateImportPacientes);
+router.post("/importar", forbidRoles(ROLES.RECEPCION), upload.single("archivo"), importPacientesFromExcel);
 router.get("/especialista/:especialistaId", getPacientesByEspecialista);
 
 router.get("/", getAllPacientes);
 router.get("/:id", getPacienteById);
-router.post("/", createPaciente);
-router.put("/:id", updatePaciente);
-router.delete("/:id", deletePaciente);
+router.post("/", forbidRoles(ROLES.RECEPCION), createPaciente);
+router.put("/:id", forbidRoles(ROLES.RECEPCION), updatePaciente);
+router.delete("/:id", forbidRoles(ROLES.RECEPCION), deletePaciente);
 
 export default router;

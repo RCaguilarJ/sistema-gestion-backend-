@@ -27,7 +27,7 @@ export default (sequelize) => {
     },
     role: {
       // Estos valores deben coincidir EXACTAMENTE con tu base de datos
-      type: DataTypes.ENUM('ADMIN', 'SUPER_ADMIN', 'DOCTOR', 'NUTRI', 'PSY', 'PATIENT', 'ENDOCRINOLOGO', 'PODOLOGO', 'PSICOLOGO'),
+      type: DataTypes.ENUM('ADMIN', 'SUPER_ADMIN', 'RECEPCION', 'DOCTOR', 'NUTRI', 'PSY', 'PATIENT', 'ENDOCRINOLOGO', 'PODOLOGO', 'PSICOLOGO'),
       allowNull: false,
       defaultValue: 'DOCTOR'
     },

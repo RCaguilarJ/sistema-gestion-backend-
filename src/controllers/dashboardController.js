@@ -1,4 +1,5 @@
 ﻿import db from '../models/index.js';
+import { ADMIN_VIEW_ROLES } from '../constants/roles.js';
 const { Paciente, Cita, PsicologiaSesion } = db; // <--- IMPORTANTE: Agregamos Cita
 
 const normalizeRole = (value) => {
@@ -73,7 +74,7 @@ export const getDashboardStats = async (req, res) => {
   try {
     const role = normalizeRole(req.user?.role);
     const userId = req.user?.id;
-    const isAdmin = role === "ADMIN" || role === "SUPER_ADMIN";
+    const isAdmin = ADMIN_VIEW_ROLES.includes(role);
     const field = roleToEspecialistaField(role);
 
     const pacientesWhere = !isAdmin && field && userId ? { [field]: userId } : undefined;

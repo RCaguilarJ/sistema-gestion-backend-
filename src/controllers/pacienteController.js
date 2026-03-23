@@ -3,30 +3,59 @@ import { Op } from "sequelize";
 import fs from "fs";
 import path from "path";
 import XLSX from "xlsx";
+import { ADMIN_VIEW_ROLES } from "../constants/roles.js";
+import {
+  normalizeEstadoPago,
+  normalizeTallaInput,
+  normalizeTipoMembresia,
+} from "../utils/pacienteFields.js";
 
 const UPLOADS_DIR = path.resolve("uploads");
 const ALLOWED_EXTENSIONS = new Set([".xlsx", ".xls"]);
 const HEADER_MAP = {
   nombre: "nombre",
+  nombredelpaciente: "nombre",
   curp: "curp",
   fechanacimiento: "fechaNacimiento",
+  fechadenacimiento: "fechaNacimiento",
   genero: "genero",
   telefono: "telefono",
   celular: "celular",
   email: "email",
+  domicilio: "calleNumero",
   callenumero: "calleNumero",
   colonia: "colonia",
   municipio: "municipio",
   estado: "estado",
+  cp: "codigoPostal",
   codigopostal: "codigoPostal",
   grupo: "grupo",
+  grupoalquepertenece: "grupo",
+  grupodeadultos: "grupoAdultos",
+  grupoadultos: "grupoAdultos",
+  programa: "programa",
+  campana: "campana",
+  campaña: "campana",
   tiposervicio: "tipoServicio",
+  tipodeservicio: "tipoServicio",
+  tipomembresia: "tipoMembresia",
+  tipodemembresia: "tipoMembresia",
+  membresia: "tipoMembresia",
+  estadopago: "estadoPago",
+  estadodepago: "estadoPago",
   tipoterapia: "tipoTerapia",
+  tipodeterapia: "tipoTerapia",
   responsable: "responsable",
   motivoconsulta: "motivoConsulta",
+  motivodeconsulta: "motivoConsulta",
   mesestadistico: "mesEstadistico",
+  mes: "mesEstadistico",
+  mescorrespondiente: "mesEstadistico",
   primeravez: "primeraVez",
   estatus: "estatus",
+  talla: "talla",
+  tallacintura: "talla",
+  talladecintura: "talla",
   estatura: "estatura",
   peso: "pesoKg",
   pesokg: "pesoKg",
@@ -34,6 +63,8 @@ const HEADER_MAP = {
   imc: "imc",
   tipodiabetes: "tipoDiabetes",
   fechadiagnostico: "fechaDiagnostico",
+  fechadediagnostico: "fechaDiagnostico",
+  fechadeconsulta: "ultimaVisita",
   riesgo: "riesgo",
   ultimavisita: "ultimaVisita",
   usuarioid: "usuarioId",
@@ -50,6 +81,31 @@ const ALLOWED_GENERO = new Set(["Masculino", "Femenino", "Otro"]);
 const ALLOWED_ESTATUS = new Set(["Activo", "Inactivo"]);
 const ALLOWED_TIPO_DIABETES = new Set(["Tipo 1", "Tipo 2", "Gestacional", "Otro"]);
 const ALLOWED_RIESGO = new Set(["Alto", "Medio", "Bajo"]);
+const GENERO_MAP = {
+  masculino: "Masculino",
+  maculino: "Masculino",
+  m: "Masculino",
+  hombre: "Masculino",
+  femenino: "Femenino",
+  f: "Femenino",
+  mujer: "Femenino",
+  otro: "Otro",
+};
+const MES_MAP = {
+  enero: "Enero",
+  febrero: "Febrero",
+  marzo: "Marzo",
+  abril: "Abril",
+  mayo: "Mayo",
+  junio: "Junio",
+  julio: "Julio",
+  agosto: "Agosto",
+  septiembre: "Septiembre",
+  setiembre: "Septiembre",
+  octubre: "Octubre",
+  noviembre: "Noviembre",
+  diciembre: "Diciembre",
+};
 
 const normalizeHeader = (value) => {
   if (value === null || value === undefined) return "";
@@ -66,6 +122,56 @@ const toTrimmedString = (value) => {
   if (value === null || value === undefined) return null;
   const text = value.toString().trim();
   return text.length > 0 ? text : null;
+};
+
+const normalizeLookupValue = (value, dictionary) => {
+  const text = toTrimmedString(value);
+  if (!text) return null;
+  return dictionary[normalizeHeader(text)] || text;
+};
+
+const normalizeGeneroInput = (value) => normalizeLookupValue(value, GENERO_MAP);
+
+const normalizeMesInput = (value) => normalizeLookupValue(value, MES_MAP);
+
+const normalizePhoneInput = (value) => {
+  const text = toTrimmedString(value);
+  if (!text || text === "0") return null;
+  return text;
+};
+
+const parseDayMonthYearText = (value) => {
+  if (value === null || value === undefined) return null;
+  const text = value.toString().trim();
+  if (!text) return null;
+
+  const match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (!match) return null;
+
+  let [, day, month, year] = match;
+  if (year.length === 2) {
+    year = Number(year) >= 50 ? `19${year}` : `20${year}`;
+  }
+
+  const dayNumber = Number(day);
+  const monthNumber = Number(month);
+  const yearNumber = Number(year);
+  const parsed = new Date(yearNumber, monthNumber - 1, dayNumber);
+
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.getFullYear() !== yearNumber ||
+    parsed.getMonth() !== monthNumber - 1 ||
+    parsed.getDate() !== dayNumber
+  ) {
+    return null;
+  }
+
+  return {
+    year: `${yearNumber}`,
+    month: `${monthNumber}`.padStart(2, "0"),
+    day: `${dayNumber}`.padStart(2, "0"),
+  };
 };
 
 const parseNumber = (value) => {
@@ -88,7 +194,7 @@ const parseBoolean = (value) => {
   if (value === null || value === undefined || value === "") return null;
   if (typeof value === "boolean") return value;
   const text = value.toString().trim().toLowerCase();
-  if (["si", "s", "1", "true"].includes(text)) return true;
+  if (["si", "s", "1", "true", "x", "✓", "check"].includes(text)) return true;
   if (["no", "n", "0", "false"].includes(text)) return false;
   return null;
 };
@@ -100,10 +206,8 @@ const parseDateOnly = (value) => {
   }
   const text = value.toString().trim();
   if (!text) return null;
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(text)) {
-    const [day, month, year] = text.split("/");
-    return `${year}-${month}-${day}`;
-  }
+  const slashDate = parseDayMonthYearText(text);
+  if (slashDate) return `${slashDate.year}-${slashDate.month}-${slashDate.day}`;
   if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
     return text;
   }
@@ -119,6 +223,13 @@ const parseDateTime = (value) => {
   }
   const text = value.toString().trim();
   if (!text) return null;
+  const slashDate = parseDayMonthYearText(text);
+  if (slashDate) {
+    return `${slashDate.year}-${slashDate.month}-${slashDate.day}T12:00:00.000Z`;
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    return `${text}T12:00:00.000Z`;
+  }
   const parsed = new Date(text);
   if (Number.isNaN(parsed.getTime())) return null;
   return parsed.toISOString();
@@ -171,6 +282,8 @@ const buildEspecialistaDefaults = (req) => {
   return defaults;
 };
 
+const isAdminImportMode = (req) => normalizeRole(req.body?.especialistaRole) === "ADMIN";
+
 const applyEspecialistaDefaults = (paciente, defaults) => {
   if (!paciente.medicoId && defaults.medicoId) paciente.medicoId = defaults.medicoId;
   if (!paciente.nutriologoId && defaults.nutriologoId) paciente.nutriologoId = defaults.nutriologoId;
@@ -199,6 +312,27 @@ const collectEspecialistaIds = (pacientes) => {
   return Array.from(ids);
 };
 
+const formatSequelizeError = (error) => {
+  if (!error || !error.name || !error.errors) return null;
+  const isValidation =
+    error.name === "SequelizeValidationError" ||
+    error.name === "SequelizeUniqueConstraintError";
+  if (!isValidation) return null;
+
+  const fields = (error.errors || []).map((e) => ({
+    field: e.path,
+    message: e.message,
+    value: e.value,
+    type: e.type,
+  }));
+
+  return {
+    error: "Datos inválidos o repetidos. Verifique y vuelva a intentar.",
+    fields,
+    focusField: fields[0]?.field || null,
+  };
+};
+
 const findMissingEspecialistaIds = async (pacientes) => {
   const ids = collectEspecialistaIds(pacientes);
   if (ids.length === 0) return [];
@@ -222,9 +356,250 @@ const findExistingCurps = async (pacientes) => {
   return new Set(rows.map((r) => r.curp));
 };
 
+const upsertPacientes = async (pacientes) => {
+  return db.sequelize.transaction(async (transaction) => {
+    const curps = Array.from(
+      new Set(
+        pacientes
+          .map((p) => toTrimmedString(p.curp))
+          .filter((value) => value)
+          .map((value) => value.toUpperCase())
+      )
+    );
+
+    const fallbackPairs = Array.from(
+      new Map(
+        pacientes
+          .filter((p) => !toTrimmedString(p.curp))
+          .map((p) => {
+            const fallbackKey = getPacienteFallbackIdentityKey(p);
+            if (!fallbackKey) return null;
+            return [
+              fallbackKey,
+              {
+                nombre: toTrimmedString(p.nombre),
+                fechaNacimiento: p.fechaNacimiento || null,
+              },
+            ];
+          })
+          .filter(Boolean)
+      ).values()
+    );
+
+    const whereClauses = [];
+    if (curps.length) {
+      whereClauses.push({ curp: curps });
+    }
+    fallbackPairs.forEach((pair) => {
+      whereClauses.push({
+        nombre: pair.nombre,
+        fechaNacimiento: pair.fechaNacimiento,
+      });
+    });
+
+    const existingRows = whereClauses.length
+      ? await db.Paciente.findAll({
+          where: { [Op.or]: whereClauses },
+          transaction,
+        })
+      : [];
+
+    const existingByCurp = new Map();
+    const existingByFallback = new Map();
+    existingRows.forEach((row) => {
+      const rowCurp = toTrimmedString(row.curp)?.toUpperCase();
+      const fallbackKey = getPacienteFallbackIdentityKey(row);
+      if (rowCurp) {
+        existingByCurp.set(rowCurp, row);
+      }
+      if (fallbackKey) {
+        existingByFallback.set(fallbackKey, row);
+      }
+    });
+
+    let created = 0;
+    let updated = 0;
+
+    for (const paciente of pacientes) {
+      const curp = toTrimmedString(paciente.curp)?.toUpperCase();
+      const fallbackKey = getPacienteFallbackIdentityKey(paciente);
+      const existing =
+        (curp ? existingByCurp.get(curp) : null) ||
+        (fallbackKey ? existingByFallback.get(fallbackKey) : null) ||
+        null;
+
+      if (existing) {
+        const updates = {};
+        Object.entries(paciente).forEach(([field, value]) => {
+          if (hasMeaningfulValue(value)) {
+            updates[field] = value;
+          }
+        });
+        await existing.update(updates, { transaction });
+        const updatedCurp = toTrimmedString(existing.curp)?.toUpperCase();
+        const updatedFallbackKey = getPacienteFallbackIdentityKey(existing);
+        if (updatedCurp) {
+          existingByCurp.set(updatedCurp, existing);
+        }
+        if (updatedFallbackKey) {
+          existingByFallback.set(updatedFallbackKey, existing);
+        }
+        updated += 1;
+        continue;
+      }
+
+      const createdRow = await db.Paciente.create(paciente, { transaction });
+      if (curp) {
+        existingByCurp.set(curp, createdRow);
+      }
+      if (fallbackKey) {
+        existingByFallback.set(fallbackKey, createdRow);
+      }
+      created += 1;
+    }
+
+    return { created, updated };
+  });
+};
+
 const isValidEmail = (email) => {
   if (!email) return true;
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+};
+
+const serializePaciente = (row) => {
+  if (!row) return row;
+  const plain = typeof row.get === "function" ? row.get({ plain: true }) : row;
+  return {
+    ...plain,
+    fechaConsulta: plain.ultimaVisita ?? plain.fechaConsulta ?? null,
+    talla: plain.talla ?? null,
+  };
+};
+
+const serializePacientes = (rows) => rows.map(serializePaciente);
+
+const hasMeaningfulValue = (value) => {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string") return value.trim().length > 0;
+  return true;
+};
+
+const getPacienteFallbackIdentityKey = (paciente) => {
+  const nombre = toTrimmedString(paciente?.nombre);
+  if (!nombre) return null;
+  return `nombre:${normalizeHeader(nombre)}|fecha:${paciente?.fechaNacimiento || ""}`;
+};
+
+const getPacienteIdentityKey = (paciente) => {
+  const curp = toTrimmedString(paciente.curp);
+  if (curp) return `curp:${curp.toUpperCase()}`;
+  return getPacienteFallbackIdentityKey(paciente);
+};
+
+const getPacientePriorityTime = (entry) => {
+  const source =
+    entry?.paciente?.ultimaVisita ||
+    entry?.paciente?.fechaDiagnostico ||
+    entry?.paciente?.fechaNacimiento;
+  if (!source) return entry?.rowNumber || 0;
+  const parsed = new Date(source).getTime();
+  return Number.isFinite(parsed) ? parsed : entry?.rowNumber || 0;
+};
+
+const consolidatePacienteEntries = (entries) => {
+  const byIdentity = new Map();
+
+  entries.forEach((entry) => {
+    const key = getPacienteIdentityKey(entry.paciente);
+    if (!key) {
+      byIdentity.set(`row:${entry.rowNumber}`, [entry]);
+      return;
+    }
+    const bucket = byIdentity.get(key) || [];
+    bucket.push(entry);
+    byIdentity.set(key, bucket);
+  });
+
+  let mergedRows = 0;
+  const consolidated = [];
+
+  byIdentity.forEach((group) => {
+    const sorted = [...group].sort((a, b) => {
+      const timeDiff = getPacientePriorityTime(b) - getPacientePriorityTime(a);
+      if (timeDiff !== 0) return timeDiff;
+      return b.rowNumber - a.rowNumber;
+    });
+
+    const base = { ...sorted[0].paciente };
+    for (const entry of sorted.slice(1)) {
+      Object.entries(entry.paciente).forEach(([field, value]) => {
+        if (!hasMeaningfulValue(base[field]) && hasMeaningfulValue(value)) {
+          base[field] = value;
+        }
+      });
+    }
+
+    if (group.length > 1) {
+      mergedRows += group.length - 1;
+    }
+
+    consolidated.push({
+      paciente: base,
+      rowNumber: sorted[0].rowNumber,
+      sourceRows: group.map((entry) => entry.rowNumber),
+    });
+  });
+
+  return {
+    entries: consolidated,
+    mergedRows,
+    mergedPatients: consolidated.filter((entry) => entry.sourceRows.length > 1).length,
+  };
+};
+
+const normalizePacientePayload = (payload) => {
+  const normalized = { ...(payload || {}) };
+  if (
+    !Object.prototype.hasOwnProperty.call(normalized, "ultimaVisita") &&
+    Object.prototype.hasOwnProperty.call(normalized, "fechaConsulta")
+  ) {
+    normalized.ultimaVisita = normalized.fechaConsulta;
+  }
+  if (Object.prototype.hasOwnProperty.call(normalized, "genero")) {
+    normalized.genero = normalizeGeneroInput(normalized.genero);
+  }
+  if (Object.prototype.hasOwnProperty.call(normalized, "mesEstadistico")) {
+    normalized.mesEstadistico = normalizeMesInput(normalized.mesEstadistico);
+  }
+  if (Object.prototype.hasOwnProperty.call(normalized, "telefono")) {
+    normalized.telefono = normalizePhoneInput(normalized.telefono);
+  }
+  if (Object.prototype.hasOwnProperty.call(normalized, "celular")) {
+    normalized.celular = normalizePhoneInput(normalized.celular);
+  }
+  if (Object.prototype.hasOwnProperty.call(normalized, "primeraVez")) {
+    const primeraVez = parseBoolean(normalized.primeraVez);
+    if (primeraVez !== null) {
+      normalized.primeraVez = primeraVez;
+    } else {
+      delete normalized.primeraVez;
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(normalized, "fechaNacimiento")) {
+    normalized.fechaNacimiento = parseDateOnly(normalized.fechaNacimiento);
+  }
+  if (Object.prototype.hasOwnProperty.call(normalized, "fechaDiagnostico")) {
+    normalized.fechaDiagnostico = parseDateOnly(normalized.fechaDiagnostico);
+  }
+  if (Object.prototype.hasOwnProperty.call(normalized, "ultimaVisita")) {
+    normalized.ultimaVisita = parseDateTime(normalized.ultimaVisita);
+  }
+  delete normalized.fechaConsulta;
+  if (Object.prototype.hasOwnProperty.call(normalized, "talla")) {
+    normalized.talla = normalizeTallaInput(normalized.talla);
+  }
+  return normalized;
 };
 
 const resolveExcelPath = (req) => {
@@ -248,15 +623,16 @@ const buildPacienteFromRow = (row, defaultUsuarioId) => {
   }
 
   const primeraVez = parseBoolean(mapped.primeraVez);
+  const primeraVezProvided = Object.prototype.hasOwnProperty.call(mapped, "primeraVez");
   const estatus = toTrimmedString(mapped.estatus);
 
   const paciente = {
     nombre: toTrimmedString(mapped.nombre),
     curp: toTrimmedString(mapped.curp),
     fechaNacimiento: parseDateOnly(mapped.fechaNacimiento),
-    genero: toTrimmedString(mapped.genero),
-    telefono: toTrimmedString(mapped.telefono),
-    celular: toTrimmedString(mapped.celular),
+    genero: normalizeGeneroInput(mapped.genero),
+    telefono: normalizePhoneInput(mapped.telefono),
+    celular: normalizePhoneInput(mapped.celular),
     email: toTrimmedString(mapped.email),
     calleNumero: toTrimmedString(mapped.calleNumero),
     colonia: toTrimmedString(mapped.colonia),
@@ -264,13 +640,19 @@ const buildPacienteFromRow = (row, defaultUsuarioId) => {
     estado: toTrimmedString(mapped.estado),
     codigoPostal: toTrimmedString(mapped.codigoPostal),
     grupo: toTrimmedString(mapped.grupo),
+    grupoAdultos: toTrimmedString(mapped.grupoAdultos),
+    programa: toTrimmedString(mapped.programa),
+    campana: toTrimmedString(mapped.campana),
+    tipoMembresia: normalizeTipoMembresia(mapped.tipoMembresia),
+    estadoPago: normalizeEstadoPago(mapped.estadoPago),
     tipoServicio: toTrimmedString(mapped.tipoServicio),
     tipoTerapia: toTrimmedString(mapped.tipoTerapia),
     responsable: toTrimmedString(mapped.responsable),
     motivoConsulta: toTrimmedString(mapped.motivoConsulta),
-    mesEstadistico: toTrimmedString(mapped.mesEstadistico),
-    primeraVez: primeraVez !== null ? primeraVez : undefined,
+    mesEstadistico: normalizeMesInput(mapped.mesEstadistico),
+    primeraVez: primeraVezProvided ? Boolean(primeraVez) : undefined,
     estatus: estatus || undefined,
+    talla: normalizeTallaInput(mapped.talla),
     estatura: parseNumber(mapped.estatura),
     pesoKg: parseNumber(mapped.pesoKg),
     hba1c: parseNumber(mapped.hba1c),
@@ -290,8 +672,50 @@ const buildPacienteFromRow = (row, defaultUsuarioId) => {
   return paciente;
 };
 
-const validatePacienteRow = (paciente, rowNumber) => {
+const findDuplicatePacienteRows = (entries) => {
   const errors = [];
+  const duplicateRows = new Set();
+  const seen = new Map();
+
+  entries.forEach(({ paciente, rowNumber }) => {
+    const curp = toTrimmedString(paciente.curp);
+    const duplicateKey = curp
+      ? `curp:${curp.toUpperCase()}`
+      : paciente.nombre
+        ? `nombre:${normalizeHeader(paciente.nombre)}|fecha:${paciente.fechaNacimiento || ""}`
+        : null;
+
+    if (!duplicateKey) return;
+
+    const found = seen.get(duplicateKey);
+    if (!found) {
+      seen.set(duplicateKey, {
+        rowNumbers: [rowNumber],
+        field: curp ? "curp" : "nombre",
+        value: curp || paciente.nombre,
+      });
+      return;
+    }
+
+    found.rowNumbers.push(rowNumber);
+  });
+
+  seen.forEach(({ rowNumbers, field, value }) => {
+    if (rowNumbers.length < 2) return;
+    rowNumbers.forEach((rowNumber) => duplicateRows.add(rowNumber));
+    errors.push({
+      row: rowNumbers[0],
+      field,
+      message: `${field === "curp" ? "CURP" : "Paciente"} repetido en el archivo (${value}) en filas ${rowNumbers.join(", ")}. Este Excel parece registrar consultas, no pacientes únicos.`,
+    });
+  });
+
+  return { errors, duplicateRows };
+};
+
+const validatePacienteRow = (paciente, rowNumber, options = {}) => {
+  const errors = [];
+  const { allowWithoutEspecialista = false } = options;
 
   if (!paciente.nombre) {
     errors.push({ row: rowNumber, field: "nombre", message: "nombre requerido" });
@@ -315,6 +739,7 @@ const validatePacienteRow = (paciente, rowNumber) => {
     errors.push({ row: rowNumber, field: "riesgo", message: "riesgo invalido" });
   }
   if (
+    !allowWithoutEspecialista &&
     !paciente.medicoId &&
     !paciente.nutriologoId &&
     !paciente.psicologoId &&
@@ -344,18 +769,7 @@ const parseExcelRows = (filePath) => {
 export const getAllPacientes = async (req, res) => {
   try {
     const role = (req.user?.role || "").toString().trim().toUpperCase();
-    const isAdmin = role === "ADMIN" || role === "SUPER_ADMIN";
-    const where = isAdmin
-      ? {
-          [Op.or]: [
-            { medicoId: { [Op.not]: null } },
-            { nutriologoId: { [Op.not]: null } },
-            { psicologoId: { [Op.not]: null } },
-            { endocrinologoId: { [Op.not]: null } },
-            { podologoId: { [Op.not]: null } },
-          ],
-        }
-      : undefined;
+    const isAdmin = ADMIN_VIEW_ROLES.includes(role);
     const include = isAdmin
       ? [
           { model: db.User, as: "medico", attributes: ["id", "nombre", "role"] },
@@ -366,11 +780,10 @@ export const getAllPacientes = async (req, res) => {
         ]
       : undefined;
     const rows = await db.Paciente.findAll({
-      where,
       include,
-      order: [["id", "DESC"]],
+      order: [["updatedAt", "DESC"], ["id", "DESC"]],
     });
-    return res.json(rows);
+    return res.json(serializePacientes(rows));
   } catch (error) {
     console.error("Error obteniendo pacientes:", error);
     return res.status(500).json({ error: "Error interno del servidor" });
@@ -383,7 +796,7 @@ export const getPacienteById = async (req, res) => {
     const { id } = req.params;
     const row = await db.Paciente.findByPk(id);
     if (!row) return res.status(404).json({ error: "Paciente no encontrado" });
-    return res.json(row);
+    return res.json(serializePaciente(row));
   } catch (error) {
     console.error("Error obteniendo paciente:", error);
     return res.status(500).json({ error: "Error interno del servidor" });
@@ -393,7 +806,7 @@ export const getPacienteById = async (req, res) => {
 // ✅ CREATE
 export const createPaciente = async (req, res) => {
   try {
-    const pacienteData = req.body;
+    const pacienteData = normalizePacientePayload(req.body);
 
     if (!pacienteData?.nombre || !pacienteData?.usuarioId) {
       return res.status(400).json({
@@ -418,8 +831,13 @@ export const createPaciente = async (req, res) => {
     }
 
     const nuevo = await db.Paciente.create(pacienteData);
-    return res.status(201).json(nuevo);
+    return res.status(201).json(serializePaciente(nuevo));
   } catch (error) {
+    const formatted = formatSequelizeError(error);
+    if (formatted) {
+      console.error("Error de validación al registrar paciente:", error);
+      return res.status(400).json(formatted);
+    }
     console.error("Error al registrar paciente:", error);
     return res.status(500).json({ error: "Error interno del servidor" });
   }
@@ -429,13 +847,19 @@ export const createPaciente = async (req, res) => {
 export const updatePaciente = async (req, res) => {
   try {
     const { id } = req.params;
+    const payload = normalizePacientePayload(req.body);
 
     const row = await db.Paciente.findByPk(id);
     if (!row) return res.status(404).json({ error: "Paciente no encontrado" });
 
-    await row.update(req.body);
-    return res.json(row);
+    await row.update(payload);
+    return res.json(serializePaciente(row));
   } catch (error) {
+    const formatted = formatSequelizeError(error);
+    if (formatted) {
+      console.error("Error de validacion al actualizar paciente:", error);
+      return res.status(400).json(formatted);
+    }
     console.error("Error actualizando paciente:", error);
     return res.status(500).json({ error: "Error interno del servidor" });
   }
@@ -483,10 +907,10 @@ export const getPacientesByEspecialista = async (req, res) => {
           { podologoId: id },
         ],
       },
-      order: [["id", "DESC"]],
+      order: [["updatedAt", "DESC"], ["id", "DESC"]],
     });
 
-    return res.json(rows);
+    return res.json(serializePacientes(rows));
   } catch (error) {
     console.error("Error obteniendo pacientes por especialista:", error);
     return res.status(500).json({ error: "Error interno del servidor" });
@@ -512,9 +936,10 @@ export const validateImportPacientes = async (req, res) => {
       return res.status(400).json({ error: "el archivo no tiene filas" });
     }
 
+    const adminImportMode = isAdminImportMode(req);
     const defaultUsuarioId = parseInteger(req.body?.usuarioId || req.user?.id);
     const especialistaDefaults = buildEspecialistaDefaults(req);
-    const validRows = [];
+    const validEntries = [];
     const errors = [];
 
     rows.forEach((row, index) => {
@@ -522,13 +947,25 @@ export const validateImportPacientes = async (req, res) => {
       applyEspecialistaDefaults(paciente, especialistaDefaults);
       assignByUserRole(paciente, req.user);
       const rowNumber = index + 2;
-      const rowErrors = validatePacienteRow(paciente, rowNumber);
+      const rowErrors = validatePacienteRow(paciente, rowNumber, {
+        allowWithoutEspecialista: adminImportMode,
+      });
       if (rowErrors.length) {
         errors.push(...rowErrors);
       } else {
-        validRows.push(paciente);
+        validEntries.push({ paciente, rowNumber });
       }
     });
+
+    const duplicateCheck = adminImportMode
+      ? { errors: [], duplicateRows: new Set() }
+      : findDuplicatePacienteRows(validEntries);
+    errors.push(...duplicateCheck.errors);
+
+    const uniqueEntries = adminImportMode
+      ? consolidatePacienteEntries(validEntries).entries
+      : validEntries.filter(({ rowNumber }) => !duplicateCheck.duplicateRows.has(rowNumber));
+    const validRows = uniqueEntries.map(({ paciente }) => paciente);
 
     const missingIds = await findMissingEspecialistaIds(validRows);
     if (missingIds.length) {
@@ -539,7 +976,7 @@ export const validateImportPacientes = async (req, res) => {
       });
     }
 
-    const existingCurps = await findExistingCurps(validRows);
+    const existingCurps = adminImportMode ? new Set() : await findExistingCurps(validRows);
     if (existingCurps.size > 0) {
       existingCurps.forEach((curp) => {
         errors.push({
@@ -552,10 +989,14 @@ export const validateImportPacientes = async (req, res) => {
 
     return res.json({
       total: rows.length,
-      validos: validRows.length,
-      invalidos: rows.length - validRows.length,
+      validos: uniqueEntries.length,
+      invalidos: rows.length - uniqueEntries.length,
       errors,
-      preview: validRows.slice(0, 20),
+      migracionAdmin: adminImportMode,
+      preview: uniqueEntries.slice(0, 20).map(({ rowNumber, paciente }) => ({
+        rowNumber,
+        ...serializePaciente(paciente),
+      })),
     });
   } catch (error) {
     console.error("Error validando excel:", error);
@@ -582,9 +1023,10 @@ export const importPacientesFromExcel = async (req, res) => {
       return res.status(400).json({ error: "el archivo no tiene filas" });
     }
 
+    const adminImportMode = isAdminImportMode(req);
     const defaultUsuarioId = parseInteger(req.body?.usuarioId || req.user?.id);
     const especialistaDefaults = buildEspecialistaDefaults(req);
-    const pacientes = [];
+    const validEntries = [];
     const errors = [];
 
     rows.forEach((row, index) => {
@@ -592,13 +1034,25 @@ export const importPacientesFromExcel = async (req, res) => {
       applyEspecialistaDefaults(paciente, especialistaDefaults);
       assignByUserRole(paciente, req.user);
       const rowNumber = index + 2;
-      const rowErrors = validatePacienteRow(paciente, rowNumber);
+      const rowErrors = validatePacienteRow(paciente, rowNumber, {
+        allowWithoutEspecialista: adminImportMode,
+      });
       if (rowErrors.length) {
         errors.push(...rowErrors);
       } else {
-        pacientes.push(paciente);
+        validEntries.push({ paciente, rowNumber });
       }
     });
+
+    const duplicateCheck = adminImportMode
+      ? { errors: [], duplicateRows: new Set() }
+      : findDuplicatePacienteRows(validEntries);
+    errors.push(...duplicateCheck.errors);
+
+    const uniqueEntries = adminImportMode
+      ? consolidatePacienteEntries(validEntries).entries
+      : validEntries.filter(({ rowNumber }) => !duplicateCheck.duplicateRows.has(rowNumber));
+    const pacientes = uniqueEntries.map(({ paciente }) => paciente);
 
     if (errors.length) {
       return res.status(400).json({
@@ -618,7 +1072,7 @@ export const importPacientesFromExcel = async (req, res) => {
       });
     }
 
-    const existingCurps = await findExistingCurps(pacientes);
+    const existingCurps = adminImportMode ? new Set() : await findExistingCurps(pacientes);
     if (existingCurps.size > 0) {
       return res.status(400).json({
         error: "curps duplicados",
@@ -626,10 +1080,15 @@ export const importPacientesFromExcel = async (req, res) => {
       });
     }
 
-    const created = await db.Paciente.bulkCreate(pacientes, { validate: true });
+    const result = adminImportMode
+      ? await upsertPacientes(pacientes)
+      : { created: (await db.Paciente.bulkCreate(pacientes, { validate: true })).length, updated: 0 };
     return res.status(201).json({
       total: rows.length,
-      importados: created.length,
+      importados: result.created + result.updated,
+      creados: result.created,
+      actualizados: result.updated,
+      migracionAdmin: adminImportMode,
     });
   } catch (error) {
     console.error("Error importando excel:", error);

@@ -44,3 +44,19 @@ export const authorizeRoles = (...roles) => {
     next();
   };
 };
+
+export const forbidRoles = (...roles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(403).json({ message: 'Usuario no autenticado.' });
+    }
+    if (roles.includes(req.user.role)) {
+      return res.status(403).json({
+        message: 'Tu rol es de solo lectura para esta acción.',
+        userRole: req.user.role,
+        forbiddenRoles: roles,
+      });
+    }
+    next();
+  };
+};

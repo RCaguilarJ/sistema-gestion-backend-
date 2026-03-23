@@ -36,6 +36,48 @@ db.PsicologiaObjetivo = PsicologiaObjetivo;
 db.PsicologiaEstrategia = PsicologiaEstrategia;
 db.PsicologiaNota = PsicologiaNota;
 
+// 2.1) Touch paciente when related info changes
+const touchPaciente = (pacienteId, options = {}) => {
+  if (!pacienteId) return Promise.resolve();
+  return db.Paciente.update(
+    { updatedAt: new Date() },
+    {
+      where: { id: pacienteId },
+      transaction: options?.transaction,
+      hooks: false,
+    }
+  );
+};
+
+const registerPacienteTouchHooks = (model) => {
+  if (!model || typeof model.addHook !== "function") return;
+
+  const handler = async (instance, options) => {
+    const pacienteId = instance?.pacienteId;
+    if (!pacienteId) return;
+    await touchPaciente(pacienteId, options);
+  };
+
+  model.addHook("afterCreate", handler);
+  model.addHook("afterUpdate", handler);
+  model.addHook("afterDestroy", handler);
+};
+
+[
+  db.Consulta,
+  db.Cita,
+  db.Nutricion,
+  db.PlanAlimentacion,
+  db.Documento,
+  db.PsicologiaSesion,
+  db.PsicologiaEvaluacion,
+  db.PsicologiaObjetivo,
+  db.PsicologiaEstrategia,
+  db.PsicologiaNota,
+].forEach(registerPacienteTouchHooks);
+
+db.touchPaciente = touchPaciente;
+
 // ✅ 3) Relaciones (si aplican)
 // (tus relaciones actuales están bien)
 db.User.hasMany(db.Paciente, { foreignKey: "medicoId", as: "pacientesMedico" });

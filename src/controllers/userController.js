@@ -1,7 +1,7 @@
 import db from '../models/index.js';
 import bcrypt from 'bcryptjs';
 import { Op } from 'sequelize';
-import { ROLES, ADMIN_ROLES, MEDICAL_ROLES } from '../constants/roles.js';
+import { ROLES, ADMIN_ROLES, ADMIN_VIEW_ROLES, MEDICAL_ROLES } from '../constants/roles.js';
 
 const User = db.User;
 
@@ -28,6 +28,7 @@ const normalizeRole = (value) => {
 };
 
 const isAdminRole = (role) => ADMIN_ROLES.includes(role);
+const canViewAdminData = (role) => ADMIN_VIEW_ROLES.includes(role);
 const isMedicalRole = (role) => MEDICAL_ROLES.includes(role);
 
 export const getAllUsers = async (req, res) => {
@@ -156,7 +157,7 @@ export const getEspecialistas = async (req, res) => {
 
         let targetRole = normalizeRole(req.query?.role);
 
-        if (isAdminRole(requesterRole)) {
+        if (canViewAdminData(requesterRole)) {
             if (targetRole && !SPECIALIST_ROLES.includes(targetRole)) {
                 return res.status(400).json({ message: 'Rol de especialista invalido.' });
             }

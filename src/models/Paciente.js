@@ -1,4 +1,10 @@
 import { DataTypes } from 'sequelize';
+import {
+  normalizeEstadoPago,
+  normalizeOptionalString,
+  normalizeTallaInput,
+  normalizeTipoMembresia,
+} from '../utils/pacienteFields.js';
 
 // Eliminamos la importación de 'database.js' porque index.js nos pasará la conexión.
 
@@ -33,6 +39,41 @@ export default (sequelize) => {
 
     // --- PROGRAMA / ADMIN ---
     grupo: { type: DataTypes.STRING },
+    grupoAdultos: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      set(value) {
+        this.setDataValue('grupoAdultos', normalizeOptionalString(value));
+      },
+    },
+    tipoMembresia: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      set(value) {
+        this.setDataValue('tipoMembresia', normalizeTipoMembresia(value));
+      },
+    },
+    estadoPago: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      set(value) {
+        this.setDataValue('estadoPago', normalizeEstadoPago(value));
+      },
+    },
+    programa: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      set(value) {
+        this.setDataValue('programa', normalizeOptionalString(value));
+      },
+    },
+    campana: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      set(value) {
+        this.setDataValue('campana', normalizeOptionalString(value));
+      },
+    },
     tipoServicio: { type: DataTypes.STRING },
     tipoTerapia: { type: DataTypes.STRING },
     responsable: { type: DataTypes.STRING },
@@ -45,6 +86,13 @@ export default (sequelize) => {
     estatura: { 
       type: DataTypes.DECIMAL(3, 2), 
       allowNull: true 
+    },
+    talla: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      set(value) {
+        this.setDataValue('talla', normalizeTallaInput(value));
+      },
     },
     pesoKg: { type: DataTypes.DECIMAL(5, 1) },
     hba1c: { type: DataTypes.DECIMAL(4, 1) },

@@ -170,5 +170,74 @@ export const getConsultaById = async (req, res) => {
   }
 };
 
+/**
+ * Actualiza una consulta existente.
+ * Ruta: PUT /api/consultas/:id
+ */
+export const updateConsultaById = async (req, res) => {
+  const { id } = req.params;
+  const datosConsulta = req.body || {};
+
+  try {
+    const consulta = await Consulta.findByPk(id);
+    if (!consulta) {
+      return res.status(404).json({ message: 'Consulta no encontrada.' });
+    }
+
+    const payload = buildConsultaPayload(datosConsulta, consulta.pacienteId);
+    delete payload.pacienteId; // no permitir cambio de paciente
+
+    await consulta.update(payload);
+
+    // Actualizar métricas del paciente si aplica
+    const paciente = await db.Paciente.findByPk(consulta.pacienteId);
+    if (paciente) {
+      const updates = {};
+      if (payload.hba1c !== null) updates.hba1c = payload.hba1c;
+      if (payload.pesoKg !== null) updates.pesoKg = payload.pesoKg;
+      if (payload.glucosa !== null) updates.glucosa = payload.glucosa;
+      if (payload.presionArterial !== null) updates.presionArterial = payload.presionArterial;
+      if (payload.fechaConsulta) updates.ultimaVisita = payload.fechaConsulta;
+
+      if (payload.pesoKg !== null) {
+        const estatura = Number(paciente.estatura);
+        if (Number.isFinite(estatura) && estatura > 0) {
+          updates.imc = Number((payload.pesoKg / (estatura * estatura)).toFixed(1));
+        }
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await paciente.update(updates);
+      }
+    }
+
+    res.json(consulta);
+  } catch (error) {
+    console.error(`Error al actualizar consulta ${id}:`, error);
+    res.status(500).json({ message: 'Error al actualizar la consulta.', error: error.message });
+  }
+};
+
+/**
+ * Elimina una consulta existente.
+ * Ruta: DELETE /api/consultas/:id
+ */
+export const deleteConsultaById = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const consulta = await Consulta.findByPk(id);
+    if (!consulta) {
+      return res.status(404).json({ message: 'Consulta no encontrada.' });
+    }
+
+    await consulta.destroy();
+    res.json({ message: 'Consulta eliminada.' });
+  } catch (error) {
+    console.error(`Error al eliminar consulta ${id}:`, error);
+    res.status(500).json({ message: 'Error al eliminar la consulta.', error: error.message });
+  }
+};
+
 
 

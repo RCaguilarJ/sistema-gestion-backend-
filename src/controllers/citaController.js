@@ -1,33 +1,20 @@
 import db from "../models/index.js";
+import { ADMIN_VIEW_ROLES } from "../constants/roles.js";
 
-const parseDate = (value) => {
-  if (!value) return null;
-  if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return value;
-  }
-  const text = value.toString().trim();
-  if (!text) return null;
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(text)) {
-    const [day, month, year] = text.split("/");
-    return new Date(`${year}-${month}-${day}`);
-  }
-  const parsed = new Date(text);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+const parseDate = (v) => {
+  if (!v) return null;
+  const p = new Date(v);
+  return Number.isNaN(p.getTime()) ? null : p;
 };
 
-const toTrimmedString = (value) => {
-  if (value === null || value === undefined) return null;
-  const text = value.toString().trim();
-  return text.length > 0 ? text : null;
-};
+const toTrimmedString = (v) =>
+  v === null || v === undefined ? null : v.toString().trim() || null;
 
-const normalizeEstadoCita = (estado) => {
-  if (!estado) return "Pendiente";
-  const value = estado.toString().trim().toLowerCase();
-  if (value === "confirmada" || value === "confirmado") return "Confirmada";
-  if (value === "pendiente") return "Pendiente";
-  if (value === "cancelada" || value === "cancelado") return "Cancelada";
-  if (value === "completada" || value === "completado") return "Completada";
+const normalizeEstadoCita = (e) => {
+  if (!e) return "Pendiente";
+  const v = e.toString().trim().toLowerCase();
+  if (v === "confirmada" || v === "confirmado") return "Confirmada";
+  if (v === "cancelada" || v === "cancelado") return "Cancelada";
   return "Pendiente";
 };
 
@@ -103,64 +90,123 @@ export const getCitasByPacienteId = async (req, res) => {
 export const createCitaByPaciente = async (req, res) => {
   try {
     const { pacienteId } = req.params;
-    const pacienteIdNumber = Number(pacienteId);
-    if (!Number.isFinite(pacienteIdNumber) || pacienteIdNumber <= 0) {
-      return res.status(400).json({ error: "pacienteId invalido" });
+    const pId = Number(pacienteId);
+
+    // Evita el error 'Unknown column NaN' que vimos en tus logs
+    if (Number.isNaN(pId) || pId <= 0) {
+      return res.status(400).json({ error: "ID de paciente inválido (NaN)." });
     }
 
     const body = req.body || {};
-    const fechaHora = parseDate(body.fechaHora ?? body.fecha ?? body.fecha_cita);
+    const fechaHora = parseDate(body.fechaHora ?? body.fecha);
     const motivo = toTrimmedString(body.motivo ?? body.descripcion);
-    const notas = toTrimmedString(body.notas ?? body.nota ?? body.comentarios);
-    const medicoId = Number(body.medicoId ?? req.user?.id);
-    const estado = normalizeEstadoCita(body.estado);
 
-    if (!fechaHora) {
-      return res.status(400).json({ error: "fechaHora requerida" });
-    }
-    if (!motivo) {
-      return res.status(400).json({ error: "motivo requerido" });
-    }
-    if (!Number.isFinite(medicoId) || medicoId <= 0) {
-      return res.status(400).json({ error: "medicoId requerido" });
+    // Resuelve el error 400 asignando un médico por defecto si el front no lo envía
+    const medicoId = Number(body.medicoId || req.user?.id || 46);
+
+    if (!fechaHora || !motivo || Number.isNaN(medicoId)) {
+      return res.status(400).json({
+        error: "Faltan campos obligatorios",
+        recibido: { fechaHora, motivo, medicoId },
+      });
     }
 
     const nueva = await db.Cita.create({
       fechaHora,
       motivo,
-      notas,
-      estado,
-      pacienteId: pacienteIdNumber,
+      notas: toTrimmedString(body.notas) || "",
+      estado: normalizeEstadoCita(body.estado),
+      pacienteId: pId,
       medicoId,
     });
 
     return res.status(201).json(nueva);
   } catch (error) {
-    console.error("Error creando cita del paciente:", error);
-    return res.status(500).json({ error: "Error interno del servidor" });
+    console.error("ERROR CRÍTICO:", error);
+    return res.status(500).json({
+      error: "Error interno del servidor",
+      detalle: error.message,
+    });
   }
 };
 
 export const getCitasByDoctor = async (req, res) => {
   try {
     const { medicoId } = req.params;
+    const id = Number(medicoId);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ error: "medicoId invalido" });
+    }
 
-    const rows = await db.sequelize.query(
-      `
-      SELECT 
-        id, usuario_id, medico_id, nombre, email, telefono, especialidad,
-        fecha_cita, descripcion, estado, fecha_registro, fecha_actualizacion
-      FROM citas
-      WHERE medico_id = :medicoId
-      ORDER BY fecha_cita DESC
-      `,
-      {
-        replacements: { medicoId: Number(medicoId) },
-        type: db.Sequelize.QueryTypes.SELECT,
-      }
-    );
+    const [appRows, portalRows] = await Promise.all([
+      db.sequelize.query(
+        `
+        SELECT 
+          c.id,
+          c.fechaHora,
+          c.motivo,
+          c.notas,
+          c.estado,
+          c.pacienteId,
+          c.createdAt,
+          c.updatedAt,
+          p.nombre AS pacienteNombre
+        FROM cita c
+        LEFT JOIN pacientes p ON p.id = c.pacienteId
+        WHERE c.medicoId = :medicoId
+        ORDER BY c.fechaHora DESC
+        `,
+        {
+          replacements: { medicoId: id },
+          type: db.Sequelize.QueryTypes.SELECT,
+        }
+      ),
+      db.sequelize.query(
+        `
+        SELECT 
+          id, usuario_id, medico_id, nombre, email, telefono, especialidad,
+          fecha_cita, descripcion, estado, fecha_registro, fecha_actualizacion
+        FROM citas
+        WHERE medico_id = :medicoId
+        ORDER BY fecha_cita DESC
+        `,
+        {
+          replacements: { medicoId: id },
+          type: db.Sequelize.QueryTypes.SELECT,
+        }
+      ),
+    ]);
 
-    return res.json(rows);
+    const formatted = [
+      ...appRows.map((row) => ({
+        id: row.id,
+        usuario_id: null,
+        medico_id: id,
+        pacienteId: row.pacienteId,
+        nombre: row.pacienteNombre || null,
+        email: null,
+        telefono: null,
+        especialidad: null,
+        fecha_cita: row.fechaHora,
+        descripcion: row.motivo,
+        notas: row.notas || null,
+        estado: normalizeEstadoPortal(row.estado),
+        fecha_registro: row.createdAt,
+        fecha_actualizacion: row.updatedAt,
+        source: "app",
+      })),
+      ...portalRows.map((row) => ({
+        ...row,
+        estado: normalizeEstadoPortal(row.estado),
+        source: "portal",
+      })),
+    ].sort((a, b) => {
+      const aDate = a.fecha_cita ? new Date(a.fecha_cita).getTime() : 0;
+      const bDate = b.fecha_cita ? new Date(b.fecha_cita).getTime() : 0;
+      return bDate - aDate;
+    });
+
+    return res.json(formatted);
   } catch (error) {
     console.error("Error obteniendo citas del doctor:", error);
     return res.status(500).json({ error: "Error interno del servidor" });
@@ -171,7 +217,7 @@ export const getCitasAmd = async (req, res) => {
   try {
     const medicoId = Number(req.query.medicoId);
     const role = (req.user?.role || "").toString().trim().toUpperCase();
-    const isAdmin = role === "ADMIN" || role === "SUPER_ADMIN";
+    const isAdmin = ADMIN_VIEW_ROLES.includes(role);
     const hasMedicoFilter = !isAdmin && Number.isFinite(medicoId) && medicoId > 0;
     const rows = await db.sequelize.query(
       `
@@ -202,7 +248,7 @@ export const getCitasPortal = async (req, res) => {
   try {
     const medicoId = Number(req.query.medicoId);
     const role = (req.user?.role || "").toString().trim().toUpperCase();
-    const isAdmin = role === "ADMIN" || role === "SUPER_ADMIN";
+    const isAdmin = ADMIN_VIEW_ROLES.includes(role);
     const hasMedicoFilter = !isAdmin && Number.isFinite(medicoId) && medicoId > 0;
     const filtros = [];
     if (!isAdmin) {
@@ -266,6 +312,60 @@ export const updateCitaEstado = async (req, res) => {
     return res.json({ ok: true, estado });
   } catch (error) {
     console.error("Error actualizando estado de cita AMD:", error);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
+// PUT /api/citas/:citaId (actualizar datos básicos de la cita)
+export const updateCita = async (req, res) => {
+  try {
+    const { citaId } = req.params;
+    const updates = {};
+    const allowed = ["fechaHora", "motivo", "notas", "estado", "medicoId"];
+    allowed.forEach((field) => {
+      if (req.body?.[field] !== undefined) updates[field] = req.body[field];
+    });
+
+    const cita = await db.Cita.findByPk(Number(citaId));
+    if (!cita) {
+      return res.status(404).json({ error: "Cita no encontrada." });
+    }
+
+    // Normaliza estado si viene
+    if (updates.estado) {
+      updates.estado = normalizeEstadoAmd(updates.estado);
+    }
+
+    // Asegura que siempre haya un medicoId válido para pasar validación notNull
+    const medicoFallback =
+      updates.medicoId ?? cita.medicoId ?? Number(req.user?.id);
+    if (!Number.isFinite(Number(medicoFallback))) {
+      return res.status(400).json({ error: "medicoId requerido" });
+    }
+    updates.medicoId = Number(medicoFallback);
+
+    await cita.update(updates);
+    return res.json(cita);
+  } catch (error) {
+    console.error("Error actualizando cita:", error);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
+// DELETE /api/citas/:citaId (eliminar cita)
+export const deleteCita = async (req, res) => {
+  try {
+    const { citaId } = req.params;
+    const cita = await db.Cita.findByPk(Number(citaId));
+
+    if (!cita) {
+      return res.status(404).json({ error: "Cita no encontrada." });
+    }
+
+    await cita.destroy();
+    return res.json({ message: "Cita eliminada." });
+  } catch (error) {
+    console.error("Error eliminando cita:", error);
     return res.status(500).json({ error: "Error interno del servidor" });
   }
 };
@@ -416,4 +516,3 @@ const createPacienteAndCitaFromPortal = async (cita, body, transaction) => {
 
   return { paciente, cita: nuevaCita, reutilizado };
 };
-

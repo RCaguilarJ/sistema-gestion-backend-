@@ -1,4 +1,5 @@
 import db from "../models/index.js";
+import { ADMIN_VIEW_ROLES } from "../constants/roles.js";
 
 const {
   PsicologiaSesion,
@@ -46,15 +47,23 @@ const resolvePsicologoId = (req, payload) => {
 const ensurePacienteAccess = async (req, pacienteId) => {
   const role = normalizeRole(req.user?.role);
   const userId = parseInteger(req.user?.id);
-  const isAdmin = role === "ADMIN" || role === "SUPER_ADMIN";
+  const isAdmin = ADMIN_VIEW_ROLES.includes(role);
   if (isAdmin) return true;
   if (!userId) return false;
   const paciente = await Paciente.findByPk(pacienteId, {
-    attributes: ["id", "psicologoId"],
+    attributes: ["id", "psicologoId", "medicoId"],
   });
   if (!paciente) return false;
   if (role === "PSICOLOGO" || role === "PSY") {
     return paciente.psicologoId === userId;
+  }
+  if (role === "DOCTOR") {
+    // Permitir al médico editar si es su paciente; si no tiene asignación, asignarlo.
+    if (!paciente.medicoId) {
+      await paciente.update({ medicoId: userId });
+      return true;
+    }
+    return paciente.medicoId === userId;
   }
   return false;
 };
@@ -144,6 +153,77 @@ export const addSesion = async (req, res) => {
   }
 };
 
+export const updateSesion = async (req, res) => {
+  try {
+    const { pacienteId, sesionId } = req.params;
+    const pId = parseInteger(pacienteId);
+    const sId = parseInteger(sesionId);
+    if (!pId || !sId) return res.status(400).json({ error: "ids invalidos" });
+
+    const allowed = await ensurePacienteAccess(req, pId);
+    if (!allowed) return res.status(403).json({ error: "No autorizado" });
+
+    const sesion = await PsicologiaSesion.findOne({
+      where: { id: sId, pacienteId: pId },
+    });
+    if (!sesion) return res.status(404).json({ error: "Sesión no encontrada" });
+
+    const updates = {};
+    if (req.body?.fecha !== undefined) {
+      const fechaParsed = parseDate(req.body.fecha);
+      if (!fechaParsed) return res.status(400).json({ error: "fecha invalida" });
+      updates.fecha = fechaParsed;
+    }
+    if (req.body?.estadoAnimo !== undefined) updates.estadoAnimo = req.body.estadoAnimo;
+    if (req.body?.adherencia !== undefined) {
+      updates.adherencia = validateRange(req.body.adherencia, 0, 100);
+    }
+    if (req.body?.estres !== undefined) {
+      const val = validateRange(req.body.estres, 1, 10);
+      updates.estres = val;
+    }
+    if (req.body?.intervenciones !== undefined) updates.intervenciones = req.body.intervenciones;
+    if (req.body?.notas !== undefined) updates.notas = req.body.notas;
+
+    // Si el rol es psicólogo y no se envió psicologoId, asignar el actual
+    const resolvedPsicologo = resolvePsicologoId(req, { psicologoId: sesion.psicologoId });
+    if (resolvedPsicologo) updates.psicologoId = resolvedPsicologo;
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: "Nada para actualizar" });
+    }
+
+    await sesion.update(updates);
+    return res.json(sesion);
+  } catch (error) {
+    console.error("Error actualizando sesion:", error);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
+export const deleteSesion = async (req, res) => {
+  try {
+    const { pacienteId, sesionId } = req.params;
+    const pId = parseInteger(pacienteId);
+    const sId = parseInteger(sesionId);
+    if (!pId || !sId) return res.status(400).json({ error: "ids invalidos" });
+
+    const allowed = await ensurePacienteAccess(req, pId);
+    if (!allowed) return res.status(403).json({ error: "No autorizado" });
+
+    const sesion = await PsicologiaSesion.findOne({
+      where: { id: sId, pacienteId: pId },
+    });
+    if (!sesion) return res.status(404).json({ error: "Sesión no encontrada" });
+
+    await sesion.destroy();
+    return res.json({ message: "Sesión eliminada" });
+  } catch (error) {
+    console.error("Error eliminando sesion:", error);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
 export const addEvaluacion = async (req, res) => {
   try {
     const { pacienteId } = req.params;
@@ -178,6 +258,80 @@ export const addEvaluacion = async (req, res) => {
   }
 };
 
+export const updateEvaluacion = async (req, res) => {
+  try {
+    const { pacienteId, evaluacionId } = req.params;
+    const pId = parseInteger(pacienteId);
+    const eId = parseInteger(evaluacionId);
+    if (!pId || !eId) return res.status(400).json({ error: "ids invalidos" });
+
+    const allowed = await ensurePacienteAccess(req, pId);
+    if (!allowed) return res.status(403).json({ error: "No autorizado" });
+
+    const evaluacion = await PsicologiaEvaluacion.findOne({
+      where: { id: eId, pacienteId: pId },
+    });
+    if (!evaluacion) return res.status(404).json({ error: "Evaluacion no encontrada" });
+
+    const updates = {};
+    if (req.body?.titulo !== undefined) {
+      updates.titulo = req.body.titulo;
+      if (!updates.titulo) return res.status(400).json({ error: "titulo requerido" });
+    }
+    if (req.body?.fecha !== undefined) {
+      const fechaParsed = parseDate(req.body.fecha);
+      if (!fechaParsed) return res.status(400).json({ error: "fecha invalida" });
+      updates.fecha = fechaParsed;
+    }
+    if (req.body?.ansiedadScore !== undefined) updates.ansiedadScore = req.body.ansiedadScore;
+    if (req.body?.ansiedadNivel !== undefined) updates.ansiedadNivel = req.body.ansiedadNivel;
+    if (req.body?.depresionScore !== undefined) updates.depresionScore = req.body.depresionScore;
+    if (req.body?.depresionNivel !== undefined) updates.depresionNivel = req.body.depresionNivel;
+    if (req.body?.autoeficaciaScore !== undefined)
+      updates.autoeficaciaScore = req.body.autoeficaciaScore;
+    if (req.body?.autoeficaciaNivel !== undefined)
+      updates.autoeficaciaNivel = req.body.autoeficaciaNivel;
+    if (req.body?.estrategias !== undefined) updates.estrategias = req.body.estrategias;
+    if (req.body?.notas !== undefined) updates.notas = req.body.notas;
+
+    const resolvedPsicologo = resolvePsicologoId(req, { psicologoId: evaluacion.psicologoId });
+    if (resolvedPsicologo) updates.psicologoId = resolvedPsicologo;
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: "Nada para actualizar" });
+    }
+
+    await evaluacion.update(updates);
+    return res.json(evaluacion);
+  } catch (error) {
+    console.error("Error actualizando evaluacion:", error);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
+export const deleteEvaluacion = async (req, res) => {
+  try {
+    const { pacienteId, evaluacionId } = req.params;
+    const pId = parseInteger(pacienteId);
+    const eId = parseInteger(evaluacionId);
+    if (!pId || !eId) return res.status(400).json({ error: "ids invalidos" });
+
+    const allowed = await ensurePacienteAccess(req, pId);
+    if (!allowed) return res.status(403).json({ error: "No autorizado" });
+
+    const evaluacion = await PsicologiaEvaluacion.findOne({
+      where: { id: eId, pacienteId: pId },
+    });
+    if (!evaluacion) return res.status(404).json({ error: "Evaluacion no encontrada" });
+
+    await evaluacion.destroy();
+    return res.json({ message: "Evaluacion eliminada" });
+  } catch (error) {
+    console.error("Error eliminando evaluacion:", error);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
 export const addObjetivo = async (req, res) => {
   try {
     const { pacienteId } = req.params;
@@ -202,6 +356,69 @@ export const addObjetivo = async (req, res) => {
     return res.status(201).json(row);
   } catch (error) {
     console.error("Error creando objetivo:", error);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
+export const updateObjetivo = async (req, res) => {
+  try {
+    const { pacienteId, objetivoId } = req.params;
+    const pId = parseInteger(pacienteId);
+    const oId = parseInteger(objetivoId);
+    if (!pId || !oId) return res.status(400).json({ error: "ids invalidos" });
+
+    const allowed = await ensurePacienteAccess(req, pId);
+    if (!allowed) return res.status(403).json({ error: "No autorizado" });
+
+    const objetivo = await PsicologiaObjetivo.findOne({
+      where: { id: oId, pacienteId: pId },
+    });
+    if (!objetivo) return res.status(404).json({ error: "Objetivo no encontrado" });
+
+    const updates = {};
+    if (req.body?.objetivo !== undefined) {
+      updates.objetivo = req.body.objetivo;
+      if (!updates.objetivo) return res.status(400).json({ error: "objetivo requerido" });
+    }
+    if (req.body?.progreso !== undefined) {
+      updates.progreso = validateRange(req.body.progreso, 0, 100);
+    }
+    if (req.body?.tono !== undefined) updates.tono = req.body.tono;
+
+    const resolvedPsicologo = resolvePsicologoId(req, { psicologoId: objetivo.psicologoId });
+    if (resolvedPsicologo) updates.psicologoId = resolvedPsicologo;
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: "Nada para actualizar" });
+    }
+
+    await objetivo.update(updates);
+    return res.json(objetivo);
+  } catch (error) {
+    console.error("Error actualizando objetivo:", error);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
+export const deleteObjetivo = async (req, res) => {
+  try {
+    const { pacienteId, objetivoId } = req.params;
+    const pId = parseInteger(pacienteId);
+    const oId = parseInteger(objetivoId);
+    if (!pId || !oId) return res.status(400).json({ error: "ids invalidos" });
+
+    const allowed = await ensurePacienteAccess(req, pId);
+    if (!allowed) return res.status(403).json({ error: "No autorizado" });
+
+    const objetivo = await PsicologiaObjetivo.findOne({
+      where: { id: oId, pacienteId: pId },
+    });
+    if (!objetivo) return res.status(404).json({ error: "Objetivo no encontrado" });
+
+    await objetivo.destroy();
+    return res.json({ message: "Objetivo eliminado" });
+  } catch (error) {
+    console.error("Error eliminando objetivo:", error);
     return res.status(500).json({ error: "Error interno del servidor" });
   }
 };
@@ -234,6 +451,67 @@ export const addEstrategia = async (req, res) => {
   }
 };
 
+export const updateEstrategia = async (req, res) => {
+  try {
+    const { pacienteId, estrategiaId } = req.params;
+    const pId = parseInteger(pacienteId);
+    const eId = parseInteger(estrategiaId);
+    if (!pId || !eId) return res.status(400).json({ error: "ids invalidos" });
+
+    const allowed = await ensurePacienteAccess(req, pId);
+    if (!allowed) return res.status(403).json({ error: "No autorizado" });
+
+    const estrategia = await PsicologiaEstrategia.findOne({
+      where: { id: eId, pacienteId: pId },
+    });
+    if (!estrategia) return res.status(404).json({ error: "Estrategia no encontrada" });
+
+    const updates = {};
+    if (req.body?.estrategia !== undefined) {
+      updates.estrategia = req.body.estrategia;
+      if (!updates.estrategia) return res.status(400).json({ error: "estrategia requerida" });
+    }
+    if (req.body?.frecuencia !== undefined) updates.frecuencia = req.body.frecuencia;
+    if (req.body?.estado !== undefined) updates.estado = req.body.estado;
+
+    const resolvedPsicologo = resolvePsicologoId(req, { psicologoId: estrategia.psicologoId });
+    if (resolvedPsicologo) updates.psicologoId = resolvedPsicologo;
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: "Nada para actualizar" });
+    }
+
+    await estrategia.update(updates);
+    return res.json(estrategia);
+  } catch (error) {
+    console.error("Error actualizando estrategia:", error);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
+export const deleteEstrategia = async (req, res) => {
+  try {
+    const { pacienteId, estrategiaId } = req.params;
+    const pId = parseInteger(pacienteId);
+    const eId = parseInteger(estrategiaId);
+    if (!pId || !eId) return res.status(400).json({ error: "ids invalidos" });
+
+    const allowed = await ensurePacienteAccess(req, pId);
+    if (!allowed) return res.status(403).json({ error: "No autorizado" });
+
+    const estrategia = await PsicologiaEstrategia.findOne({
+      where: { id: eId, pacienteId: pId },
+    });
+    if (!estrategia) return res.status(404).json({ error: "Estrategia no encontrada" });
+
+    await estrategia.destroy();
+    return res.json({ message: "Estrategia eliminada" });
+  } catch (error) {
+    console.error("Error eliminando estrategia:", error);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
 export const addNota = async (req, res) => {
   try {
     const { pacienteId } = req.params;
@@ -257,6 +535,67 @@ export const addNota = async (req, res) => {
     return res.status(201).json(row);
   } catch (error) {
     console.error("Error creando nota:", error);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
+export const updateNota = async (req, res) => {
+  try {
+    const { pacienteId, notaId } = req.params;
+    const pId = parseInteger(pacienteId);
+    const nId = parseInteger(notaId);
+    if (!pId || !nId) return res.status(400).json({ error: "ids invalidos" });
+
+    const allowed = await ensurePacienteAccess(req, pId);
+    if (!allowed) return res.status(403).json({ error: "No autorizado" });
+
+    const nota = await PsicologiaNota.findOne({
+      where: { id: nId, pacienteId: pId },
+    });
+    if (!nota) return res.status(404).json({ error: "Nota no encontrada" });
+
+    const updates = {};
+    if (req.body?.nota !== undefined) updates.nota = req.body.nota;
+    if (req.body?.fecha !== undefined) {
+      const fechaParsed = parseDate(req.body.fecha);
+      if (!fechaParsed) return res.status(400).json({ error: "fecha invalida" });
+      updates.fecha = fechaParsed;
+    }
+
+    const resolvedPsicologo = resolvePsicologoId(req, { psicologoId: nota.psicologoId });
+    if (resolvedPsicologo) updates.psicologoId = resolvedPsicologo;
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: "Nada para actualizar" });
+    }
+
+    await nota.update(updates);
+    return res.json(nota);
+  } catch (error) {
+    console.error("Error actualizando nota:", error);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
+export const deleteNota = async (req, res) => {
+  try {
+    const { pacienteId, notaId } = req.params;
+    const pId = parseInteger(pacienteId);
+    const nId = parseInteger(notaId);
+    if (!pId || !nId) return res.status(400).json({ error: "ids invalidos" });
+
+    const allowed = await ensurePacienteAccess(req, pId);
+    if (!allowed) return res.status(403).json({ error: "No autorizado" });
+
+    const nota = await PsicologiaNota.findOne({
+      where: { id: nId, pacienteId: pId },
+    });
+    if (!nota) return res.status(404).json({ error: "Nota no encontrada" });
+
+    await nota.destroy();
+    return res.json({ message: "Nota eliminada" });
+  } catch (error) {
+    console.error("Error eliminando nota:", error);
     return res.status(500).json({ error: "Error interno del servidor" });
   }
 };
