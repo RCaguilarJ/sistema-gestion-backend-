@@ -1,6 +1,7 @@
 import path from "path";
 import fs from "fs/promises";
 import db from "../models/index.js";
+import { ensurePacienteAccess } from "../utils/pacienteAccess.js";
 
 const UPLOADS_DIR = path.resolve("uploads");
 
@@ -33,6 +34,11 @@ export const uploadDocumento = async (req, res) => {
       return res.status(400).json({ message: "pacienteId requerido" });
     }
 
+    const paciente = await ensurePacienteAccess(req.user, pacienteId, { attributes: ["id"] });
+    if (!paciente) {
+      return res.status(404).json({ message: "Paciente no encontrado" });
+    }
+
     const safeFilename = path.basename(req.file.filename);
     const record = await Documento.create({
       nombre: nombre || req.file.originalname,
@@ -60,6 +66,11 @@ export const getDocumentos = async (req, res) => {
     const { pacienteId } = req.params || {};
     if (!pacienteId) {
       return res.status(400).json({ message: "pacienteId requerido" });
+    }
+
+    const paciente = await ensurePacienteAccess(req.user, pacienteId, { attributes: ["id"] });
+    if (!paciente) {
+      return res.status(404).json({ message: "Paciente no encontrado" });
     }
 
     const documentos = await Documento.findAll({
@@ -96,6 +107,11 @@ export const deleteDocumento = async (req, res) => {
       return res.status(404).json({ message: "Documento no encontrado" });
     }
 
+    const paciente = await ensurePacienteAccess(req.user, doc.pacienteId, { attributes: ["id"] });
+    if (!paciente) {
+      return res.status(404).json({ message: "Documento no encontrado" });
+    }
+
     await doc.destroy();
 
     const filename = path.basename(doc.url || "");
@@ -121,6 +137,11 @@ export const downloadDocumento = async (req, res) => {
 
     const doc = await Documento.findByPk(id);
     if (!doc) {
+      return res.status(404).json({ message: "Documento no encontrado" });
+    }
+
+    const paciente = await ensurePacienteAccess(req.user, doc.pacienteId, { attributes: ["id"] });
+    if (!paciente) {
       return res.status(404).json({ message: "Documento no encontrado" });
     }
 

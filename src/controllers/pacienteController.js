@@ -3,12 +3,20 @@ import { Op } from "sequelize";
 import fs from "fs";
 import path from "path";
 import XLSX from "xlsx";
-import { ADMIN_VIEW_ROLES } from "../constants/roles.js";
 import {
   normalizeEstadoPago,
   normalizeTallaInput,
   normalizeTipoMembresia,
 } from "../utils/pacienteFields.js";
+import {
+  applyPacienteWriteScope,
+  buildPacienteScopedWhere,
+  buildSpecialistPacienteWhere,
+  canViewAdminData,
+  findAccessiblePacienteById,
+  getEffectiveSpecialistId,
+  isAdminRole,
+} from "../utils/pacienteAccess.js";
 
 const UPLOADS_DIR = path.resolve("uploads");
 const ALLOWED_EXTENSIONS = new Set([".xlsx", ".xls"]);
@@ -768,8 +776,8 @@ const parseExcelRows = (filePath) => {
 // ✅ GET ALL
 export const getAllPacientes = async (req, res) => {
   try {
-    const role = (req.user?.role || "").toString().trim().toUpperCase();
-    const isAdmin = ADMIN_VIEW_ROLES.includes(role);
+    const role = normalizeRole(req.user?.role);
+    const isAdmin = canViewAdminData(role);
     const include = isAdmin
       ? [
           { model: db.User, as: "medico", attributes: ["id", "nombre", "role"] },
@@ -780,6 +788,7 @@ export const getAllPacientes = async (req, res) => {
         ]
       : undefined;
     const rows = await db.Paciente.findAll({
+      where: buildPacienteScopedWhere(req.user),
       include,
       order: [["updatedAt", "DESC"], ["id", "DESC"]],
     });
@@ -794,7 +803,7 @@ export const getAllPacientes = async (req, res) => {
 export const getPacienteById = async (req, res) => {
   try {
     const { id } = req.params;
-    const row = await db.Paciente.findByPk(id);
+    const row = await findAccessiblePacienteById(req.user, id);
     if (!row) return res.status(404).json({ error: "Paciente no encontrado" });
     return res.json(serializePaciente(row));
   } catch (error) {
@@ -806,28 +815,15 @@ export const getPacienteById = async (req, res) => {
 // ✅ CREATE
 export const createPaciente = async (req, res) => {
   try {
-    const pacienteData = normalizePacientePayload(req.body);
+    const pacienteData = applyPacienteWriteScope(
+      req.user,
+      normalizePacientePayload(req.body)
+    );
 
     if (!pacienteData?.nombre || !pacienteData?.usuarioId) {
       return res.status(400).json({
         error: "Faltan campos obligatorios: nombre, usuarioId.",
       });
-    }
-
-    const role = (req.user?.role || "").toString().trim().toUpperCase();
-    const creatorId = req.user?.id;
-    if (creatorId) {
-      if (role === "DOCTOR" && !pacienteData.medicoId) {
-        pacienteData.medicoId = creatorId;
-      } else if (role === "NUTRI" && !pacienteData.nutriologoId) {
-        pacienteData.nutriologoId = creatorId;
-      } else if ((role === "PSICOLOGO" || role === "PSY") && !pacienteData.psicologoId) {
-        pacienteData.psicologoId = creatorId;
-      } else if (role === "ENDOCRINOLOGO" && !pacienteData.endocrinologoId) {
-        pacienteData.endocrinologoId = creatorId;
-      } else if (role === "PODOLOGO" && !pacienteData.podologoId) {
-        pacienteData.podologoId = creatorId;
-      }
     }
 
     const nuevo = await db.Paciente.create(pacienteData);
@@ -847,9 +843,12 @@ export const createPaciente = async (req, res) => {
 export const updatePaciente = async (req, res) => {
   try {
     const { id } = req.params;
-    const payload = normalizePacientePayload(req.body);
+    const payload = applyPacienteWriteScope(
+      req.user,
+      normalizePacientePayload(req.body)
+    );
 
-    const row = await db.Paciente.findByPk(id);
+    const row = await findAccessiblePacienteById(req.user, id);
     if (!row) return res.status(404).json({ error: "Paciente no encontrado" });
 
     await row.update(payload);
@@ -873,9 +872,7 @@ export const deletePaciente = async (req, res) => {
     const row = await db.Paciente.findByPk(id);
     if (!row) return res.status(404).json({ error: "Paciente no encontrado" });
 
-    const role = normalizeRole(req.user?.role);
-    const isAdminRole = role === "ADMIN" || role === "SUPER_ADMIN";
-    if (!isAdminRole) {
+    if (!isAdminRole(req.user?.role)) {
       return res.status(403).json({ error: "No autorizado para eliminar este paciente" });
     }
 
@@ -891,22 +888,18 @@ export const deletePaciente = async (req, res) => {
 export const getPacientesByEspecialista = async (req, res) => {
   try {
     const { especialistaId } = req.params;
-    const id = Number(especialistaId);
+    const id = getEffectiveSpecialistId(req.user, especialistaId);
+
+    if (id === 0) {
+      return res.status(403).json({ error: "No autorizado para consultar este especialista" });
+    }
 
     if (!Number.isFinite(id) || id <= 0) {
       return res.status(400).json({ error: "especialistaId inválido" });
     }
 
     const rows = await db.Paciente.findAll({
-      where: {
-        [Op.or]: [
-          { medicoId: id },
-          { nutriologoId: id },
-          { psicologoId: id },
-          { endocrinologoId: id },
-          { podologoId: id },
-        ],
-      },
+      where: buildPacienteScopedWhere(req.user, buildSpecialistPacienteWhere(id)),
       order: [["updatedAt", "DESC"], ["id", "DESC"]],
     });
 

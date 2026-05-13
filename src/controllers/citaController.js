@@ -1,5 +1,11 @@
 import db from "../models/index.js";
-import { ADMIN_VIEW_ROLES } from "../constants/roles.js";
+import {
+  canViewAdminData,
+  ensurePacienteAccess,
+  getEffectiveSpecialistId,
+  normalizeRole,
+  parseInteger,
+} from "../utils/pacienteAccess.js";
 
 const parseDate = (v) => {
   if (!v) return null;
@@ -27,12 +33,56 @@ const normalizeEstadoPortal = (estado) => {
   return value;
 };
 
+const ensureCitaAccess = async (user, citaId) => {
+  const id = parseInteger(citaId);
+  if (!id) return null;
+
+  const cita = await db.Cita.findByPk(id);
+  if (!cita) return null;
+
+  if (canViewAdminData(user?.role)) {
+    return cita;
+  }
+
+  const userId = parseInteger(user?.id);
+  if (!userId) return null;
+
+  if (Number(cita.medicoId) === userId) {
+    return cita;
+  }
+
+  const paciente = await ensurePacienteAccess(user, cita.pacienteId, { attributes: ["id"] });
+  return paciente ? cita : null;
+};
+
+const ensurePortalCitaAccess = async (user, citaId) => {
+  const id = parseInteger(citaId);
+  if (!id) return null;
+
+  const cita = await db.Citas.findByPk(id);
+  if (!cita) return null;
+
+  if (canViewAdminData(user?.role)) {
+    return cita;
+  }
+
+  const userId = parseInteger(user?.id);
+  if (!userId) return null;
+
+  return Number(cita.medico_id) === userId ? cita : null;
+};
+
 export const getCitasByPacienteId = async (req, res) => {
   try {
     const { pacienteId } = req.params;
-    const pacienteIdNumber = Number(pacienteId);
+    const pacienteIdNumber = parseInteger(pacienteId);
     if (!Number.isFinite(pacienteIdNumber) || pacienteIdNumber <= 0) {
       return res.status(400).json({ error: "pacienteId invalido" });
+    }
+
+    const paciente = await ensurePacienteAccess(req.user, pacienteIdNumber);
+    if (!paciente) {
+      return res.status(404).json({ error: "Paciente no encontrado" });
     }
 
     const rows = await db.Cita.findAll({
@@ -45,7 +95,6 @@ export const getCitasByPacienteId = async (req, res) => {
       source: "app",
     }));
 
-    const paciente = await db.Paciente.findByPk(pacienteIdNumber);
     let citasPortal = [];
     if (paciente) {
       const orFilters = [];
@@ -90,19 +139,23 @@ export const getCitasByPacienteId = async (req, res) => {
 export const createCitaByPaciente = async (req, res) => {
   try {
     const { pacienteId } = req.params;
-    const pId = Number(pacienteId);
+    const pId = parseInteger(pacienteId);
 
     // Evita el error 'Unknown column NaN' que vimos en tus logs
     if (Number.isNaN(pId) || pId <= 0) {
       return res.status(400).json({ error: "ID de paciente inválido (NaN)." });
     }
 
+    const paciente = await ensurePacienteAccess(req.user, pId, { attributes: ["id"] });
+    if (!paciente) {
+      return res.status(404).json({ error: "Paciente no encontrado" });
+    }
+
     const body = req.body || {};
     const fechaHora = parseDate(body.fechaHora ?? body.fecha);
     const motivo = toTrimmedString(body.motivo ?? body.descripcion);
-
-    // Resuelve el error 400 asignando un médico por defecto si el front no lo envía
-    const medicoId = Number(body.medicoId || req.user?.id || 46);
+    const isAdmin = canViewAdminData(req.user?.role);
+    const medicoId = isAdmin ? parseInteger(body.medicoId) : parseInteger(req.user?.id);
 
     if (!fechaHora || !motivo || Number.isNaN(medicoId)) {
       return res.status(400).json({
@@ -133,7 +186,10 @@ export const createCitaByPaciente = async (req, res) => {
 export const getCitasByDoctor = async (req, res) => {
   try {
     const { medicoId } = req.params;
-    const id = Number(medicoId);
+    const id = getEffectiveSpecialistId(req.user, medicoId);
+    if (id === 0) {
+      return res.status(403).json({ error: "No autorizado" });
+    }
     if (!Number.isFinite(id) || id <= 0) {
       return res.status(400).json({ error: "medicoId invalido" });
     }
@@ -215,10 +271,13 @@ export const getCitasByDoctor = async (req, res) => {
 
 export const getCitasAmd = async (req, res) => {
   try {
-    const medicoId = Number(req.query.medicoId);
-    const role = (req.user?.role || "").toString().trim().toUpperCase();
-    const isAdmin = ADMIN_VIEW_ROLES.includes(role);
-    const hasMedicoFilter = !isAdmin && Number.isFinite(medicoId) && medicoId > 0;
+    const role = normalizeRole(req.user?.role);
+    const isAdmin = canViewAdminData(role);
+    const medicoId = getEffectiveSpecialistId(req.user, req.query.medicoId);
+    if (!isAdmin && (!Number.isFinite(medicoId) || medicoId <= 0)) {
+      return res.status(403).json({ error: "No autorizado" });
+    }
+    const hasMedicoFilter = Number.isFinite(medicoId) && medicoId > 0;
     const rows = await db.sequelize.query(
       `
         SELECT
@@ -246,16 +305,17 @@ export const getCitasAmd = async (req, res) => {
 
 export const getCitasPortal = async (req, res) => {
   try {
-    const medicoId = Number(req.query.medicoId);
-    const role = (req.user?.role || "").toString().trim().toUpperCase();
-    const isAdmin = ADMIN_VIEW_ROLES.includes(role);
-    const hasMedicoFilter = !isAdmin && Number.isFinite(medicoId) && medicoId > 0;
+    const role = normalizeRole(req.user?.role);
+    const isAdmin = canViewAdminData(role);
+    const medicoId = getEffectiveSpecialistId(req.user, req.query.medicoId);
+    if (!isAdmin && (!Number.isFinite(medicoId) || medicoId <= 0)) {
+      return res.status(403).json({ error: "No autorizado" });
+    }
+    const hasMedicoFilter = Number.isFinite(medicoId) && medicoId > 0;
     const filtros = [];
     if (!isAdmin) {
       filtros.push("LOWER(c.estado) NOT IN ('confirmada', 'confirmado')");
-      if (hasMedicoFilter) {
-        filtros.push("c.medico_id = :medicoId");
-      }
+      filtros.push("c.medico_id = :medicoId");
     }
     const whereClause = filtros.length > 0 ? `WHERE ${filtros.join(" AND ")}` : "";
 
@@ -303,7 +363,7 @@ export const updateCitaEstado = async (req, res) => {
     const { citaId } = req.params;
     const estado = normalizeEstadoAmd(req.body?.estado);
 
-    const cita = await db.Cita.findByPk(Number(citaId));
+    const cita = await ensureCitaAccess(req.user, citaId);
     if (!cita) {
       return res.status(404).json({ error: "Cita no encontrada." });
     }
@@ -326,7 +386,7 @@ export const updateCita = async (req, res) => {
       if (req.body?.[field] !== undefined) updates[field] = req.body[field];
     });
 
-    const cita = await db.Cita.findByPk(Number(citaId));
+    const cita = await ensureCitaAccess(req.user, citaId);
     if (!cita) {
       return res.status(404).json({ error: "Cita no encontrada." });
     }
@@ -337,8 +397,10 @@ export const updateCita = async (req, res) => {
     }
 
     // Asegura que siempre haya un medicoId válido para pasar validación notNull
-    const medicoFallback =
-      updates.medicoId ?? cita.medicoId ?? Number(req.user?.id);
+    const isAdmin = canViewAdminData(req.user?.role);
+    const medicoFallback = isAdmin
+      ? updates.medicoId ?? cita.medicoId
+      : parseInteger(req.user?.id);
     if (!Number.isFinite(Number(medicoFallback))) {
       return res.status(400).json({ error: "medicoId requerido" });
     }
@@ -356,7 +418,7 @@ export const updateCita = async (req, res) => {
 export const deleteCita = async (req, res) => {
   try {
     const { citaId } = req.params;
-    const cita = await db.Cita.findByPk(Number(citaId));
+    const cita = await ensureCitaAccess(req.user, citaId);
 
     if (!cita) {
       return res.status(404).json({ error: "Cita no encontrada." });
@@ -379,7 +441,7 @@ export const updateCitaPortalEstado = async (req, res) => {
       return res.status(400).json({ error: "Estado invalido." });
     }
 
-    const cita = await db.Citas.findByPk(Number(citaId));
+    const cita = await ensurePortalCitaAccess(req.user, citaId);
     if (!cita) {
       return res.status(404).json({ error: "Cita no encontrada." });
     }
@@ -418,7 +480,7 @@ const normalizeEstadoAmd = (estado) => {
 export const createPacienteFromCita = async (req, res) => {
   try {
     const { citaId } = req.params;
-    const cita = await db.Citas.findByPk(Number(citaId));
+    const cita = await ensurePortalCitaAccess(req.user, citaId);
 
     if (!cita) {
       return res.status(404).json({ error: "Cita no encontrada." });

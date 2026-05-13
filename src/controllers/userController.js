@@ -1,7 +1,7 @@
 import db from '../models/index.js';
 import bcrypt from 'bcryptjs';
 import { Op } from 'sequelize';
-import { ROLES, ADMIN_ROLES, ADMIN_VIEW_ROLES, MEDICAL_ROLES } from '../constants/roles.js';
+import { ROLES, ADMIN_ROLES, ADMIN_VIEW_ROLES, MEDICAL_ROLES, ALLOWED_ROLES } from '../constants/roles.js';
 
 const User = db.User;
 
@@ -45,7 +45,6 @@ export const getAllUsers = async (req, res) => {
 
 export const createUser = async (req, res) => {
     try {
-        // 1. Limpieza de datos
         let { nombre, username, email, password, role } = req.body;
         
         // Normalizar rol a mayúsculas para coincidir con el ENUM de la BD
@@ -59,7 +58,16 @@ export const createUser = async (req, res) => {
                 .replace('Ú', 'U');
         }
 
-        // 2. Validaciones
+        role = role || ROLES.DOCTOR;
+
+        if (!nombre || !username || !email || !password) {
+            return res.status(400).json({ message: "nombre, username, email y password son requeridos" });
+        }
+
+        if (!ALLOWED_ROLES.includes(role)) {
+            return res.status(400).json({ message: "Rol inválido" });
+        }
+
         const existeEmail = await User.findOne({ where: { email } });
         if (existeEmail) return res.status(400).json({ message: "El email ya está registrado" });
 
@@ -78,7 +86,10 @@ export const createUser = async (req, res) => {
             estatus: 'Activo'
         });
 
-        res.status(201).json({ message: "Usuario creado con éxito", user: newUser });
+        const sanitizedUser = newUser.get({ plain: true });
+        delete sanitizedUser.password;
+
+        res.status(201).json({ message: "Usuario creado con éxito", user: sanitizedUser });
 
     } catch (error) {
         console.error("❌ Error creando usuario:", error);

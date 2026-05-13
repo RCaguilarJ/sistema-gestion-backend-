@@ -2,9 +2,9 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import path from "path";
-import { fileURLToPath } from 'url';
+import { fileURLToPath } from "url";
 
-// Importación de tus rutas (Asegúrate de que los archivos existan en estas rutas)
+// Importacion de tus rutas (Asegurate de que los archivos existan en estas rutas)
 import authRoutes from "./src/routes/authRoutes.js";
 import pacienteRoutes from "./src/config/routes/routes/pacienteRoutes.js";
 import citaRoutes from "./src/routes/citaRoutes.js";
@@ -15,8 +15,9 @@ import documentosRoutes from "./src/routes/documentosRoutes.js";
 import userRoutes from "./src/config/routes/routes/userRoutes.js";
 import notificationRoutes from "./src/routes/notificationRoutes.js";
 import psicologiaRoutes from "./src/routes/psicologiaRoutes.js";
+import db from "./src/models/index.js";
 
-// Configuración de __dirname para ES Modules
+// Configuracion de __dirname para ES Modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -28,12 +29,12 @@ if (process.env.NODE_ENV === "production") {
 } else {
   dotenv.config({ path: ".env.local" });
 }
-dotenv.config(); // Fallback a .env estándar
+dotenv.config(); // Fallback a .env estandar
 
 const app = express();
 
 // ============================================================
-// CONFIGURACIÓN DE CORS
+// CONFIGURACION DE CORS
 // ============================================================
 const parseAllowedOrigins = (value) =>
   (value || "")
@@ -63,9 +64,9 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  // IMPORTANTE: Incluimos X-Signature y X-Source para la sincronización de citas
+  // Importante: incluimos headers de sincronizacion
   allowedHeaders: ["Content-Type", "Authorization", "X-Signature", "X-Source"],
-  optionsSuccessStatus: 200
+  optionsSuccessStatus: 200,
 };
 
 // ============================================================
@@ -76,7 +77,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cors(corsOptions));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// Manejo explícito de Preflight para todas las rutas
+// Manejo explicito de Preflight para todas las rutas
 app.options("*", cors(corsOptions));
 
 // ============================================================
@@ -93,13 +94,26 @@ app.use("/api/documentos", documentosRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/notifications", notificationRoutes);
 
-// Health check para verificar el estado en el VPS
-app.get("/api/health", (req, res) => {
-  res.json({ 
-    ok: true, 
-    env: process.env.NODE_ENV,
-    timestamp: new Date().toISOString() 
-  });
+// Health check real: proceso + acceso a base de datos
+app.get("/api/health", async (req, res) => {
+  try {
+    await db.sequelize.authenticate();
+    return res.json({
+      ok: true,
+      env: process.env.NODE_ENV,
+      database: "up",
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Health check DB error:", error.message);
+    return res.status(503).json({
+      ok: false,
+      env: process.env.NODE_ENV,
+      database: "down",
+      error: "Database unavailable",
+      timestamp: new Date().toISOString(),
+    });
+  }
 });
 
 // ============================================================
@@ -119,7 +133,7 @@ app.use((err, req, res, next) => {
 // ============================================================
 // INICIAR SERVIDOR
 // ============================================================
-// Usamos el puerto 4000 que es el configurado en tu .htaccess del VPS
+// Puerto definido por entorno; si no existe, usamos 4000
 const PORT = process.env.PORT || 4000;
 const HOST = "0.0.0.0";
 

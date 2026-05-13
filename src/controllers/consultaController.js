@@ -1,5 +1,6 @@
 // src/controllers/consultaController.js
 import db from '../models/index.js'; // Importamos desde el indice de modelos
+import { ensurePacienteAccess } from '../utils/pacienteAccess.js';
 const { Consulta } = db; // Destructuramos el modelo Consulta
 
 const toTrimmedString = (value) => {
@@ -83,6 +84,11 @@ export const getConsultasByPacienteId = async (req, res) => {
       return res.status(400).json({ message: 'pacienteId invalido.' });
     }
 
+    const paciente = await ensurePacienteAccess(req.user, pacienteIdNumber, { attributes: ['id'] });
+    if (!paciente) {
+      return res.status(404).json({ message: 'Paciente no encontrado.' });
+    }
+
     const consultas = await Consulta.findAll({
       where: { pacienteId: pacienteIdNumber },
       order: [['fechaConsulta', 'DESC']], // Corregido para usar el nombre correcto del campo en BD
@@ -109,6 +115,11 @@ export const createConsulta = async (req, res) => {
       return res.status(400).json({ message: 'pacienteId invalido.' });
     }
 
+    const paciente = await ensurePacienteAccess(req.user, pacienteIdNumber, { attributes: ['id', 'estatura'] });
+    if (!paciente) {
+      return res.status(404).json({ message: 'Paciente no encontrado.' });
+    }
+
     const payload = buildConsultaPayload(datosConsulta, pacienteIdNumber);
     if (!payload.motivo) {
       return res.status(400).json({ message: 'motivo es requerido.' });
@@ -119,7 +130,6 @@ export const createConsulta = async (req, res) => {
 
     const nuevaConsulta = await Consulta.create(payload);
 
-    const paciente = await db.Paciente.findByPk(pacienteIdNumber);
     if (paciente) {
       const updates = {};
       if (payload.hba1c !== null) updates.hba1c = payload.hba1c;
@@ -163,6 +173,11 @@ export const getConsultaById = async (req, res) => {
       return res.status(404).json({ message: 'Consulta no encontrada.' });
     }
 
+    const paciente = await ensurePacienteAccess(req.user, consulta.pacienteId, { attributes: ['id'] });
+    if (!paciente) {
+      return res.status(404).json({ message: 'Consulta no encontrada.' });
+    }
+
     res.json(consulta);
   } catch (error) {
     console.error(`Error al obtener detalle de consulta ${id}:`, error);
@@ -184,13 +199,17 @@ export const updateConsultaById = async (req, res) => {
       return res.status(404).json({ message: 'Consulta no encontrada.' });
     }
 
+    const paciente = await ensurePacienteAccess(req.user, consulta.pacienteId);
+    if (!paciente) {
+      return res.status(404).json({ message: 'Consulta no encontrada.' });
+    }
+
     const payload = buildConsultaPayload(datosConsulta, consulta.pacienteId);
     delete payload.pacienteId; // no permitir cambio de paciente
 
     await consulta.update(payload);
 
     // Actualizar métricas del paciente si aplica
-    const paciente = await db.Paciente.findByPk(consulta.pacienteId);
     if (paciente) {
       const updates = {};
       if (payload.hba1c !== null) updates.hba1c = payload.hba1c;
@@ -228,6 +247,11 @@ export const deleteConsultaById = async (req, res) => {
   try {
     const consulta = await Consulta.findByPk(id);
     if (!consulta) {
+      return res.status(404).json({ message: 'Consulta no encontrada.' });
+    }
+
+    const paciente = await ensurePacienteAccess(req.user, consulta.pacienteId, { attributes: ['id'] });
+    if (!paciente) {
       return res.status(404).json({ message: 'Consulta no encontrada.' });
     }
 

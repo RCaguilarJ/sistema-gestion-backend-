@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { authenticate, authorizeRoles, forbidRoles } from "../middleware/authMiddleware.js";
-import { ROLES } from "../constants/roles.js";
+import { ADMIN_ROLES, ADMIN_VIEW_ROLES, MEDICAL_ROLES, ROLES } from "../constants/roles.js";
 import {
   getCitasByDoctor,
   getCitasAmd,
@@ -18,15 +18,15 @@ const router = Router();
 
 router.use(authenticate);
 
-router.get("/doctor/:medicoId", getCitasByDoctor);
-router.get("/paciente/:pacienteId", getCitasByPacienteId);
-router.get("/amd", getCitasAmd);
-router.get("/portal", getCitasPortal);
-router.put("/:citaId", forbidRoles(ROLES.RECEPCION), updateCita);
-router.put("/:citaId/estado", forbidRoles(ROLES.RECEPCION), updateCitaEstado);
-router.put("/portal/:citaId/estado", forbidRoles(ROLES.RECEPCION), updateCitaPortalEstado);
-router.post("/portal/:citaId/crear-paciente", forbidRoles(ROLES.RECEPCION), createPacienteFromCita);
-router.post("/paciente/:pacienteId", forbidRoles(ROLES.RECEPCION), createCitaByPaciente);
+router.get("/doctor/:medicoId", authorizeRoles(...ADMIN_VIEW_ROLES, ...MEDICAL_ROLES), getCitasByDoctor);
+router.get("/paciente/:pacienteId", authorizeRoles(...ADMIN_VIEW_ROLES, ...MEDICAL_ROLES), getCitasByPacienteId);
+router.get("/amd", authorizeRoles(...ADMIN_VIEW_ROLES, ...MEDICAL_ROLES), getCitasAmd);
+router.get("/portal", authorizeRoles(...ADMIN_VIEW_ROLES, ...MEDICAL_ROLES), getCitasPortal);
+router.put("/:citaId", authorizeRoles(...ADMIN_ROLES, ...MEDICAL_ROLES), updateCita);
+router.put("/:citaId/estado", authorizeRoles(...ADMIN_ROLES, ...MEDICAL_ROLES), updateCitaEstado);
+router.put("/portal/:citaId/estado", authorizeRoles(...ADMIN_ROLES, ...MEDICAL_ROLES), updateCitaPortalEstado);
+router.post("/portal/:citaId/crear-paciente", authorizeRoles(...ADMIN_ROLES, ...MEDICAL_ROLES), createPacienteFromCita);
+router.post("/paciente/:pacienteId", authorizeRoles(...ADMIN_ROLES, ...MEDICAL_ROLES), createCitaByPaciente);
 router.delete(
   "/:citaId",
   authorizeRoles("ADMIN", "SUPER_ADMIN"),
