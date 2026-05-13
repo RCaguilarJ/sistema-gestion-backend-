@@ -97,10 +97,12 @@ cat > "$PUBLIC_HTML/.htaccess" << 'HTACCESS_EOF'
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
+  RewriteRule ^auth/(.*) http://localhost:__API_PORT__/api/auth/$1 [P,L]
   RewriteRule ^api/(.*) http://localhost:__API_PORT__/api/$1 [P,L]
   RewriteRule ^uploads/(.*) http://localhost:__API_PORT__/uploads/$1 [P,L]
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_URI} !^/auth(/|$)
   RewriteCond %{REQUEST_URI} !^/api(/|$)
   RewriteCond %{REQUEST_URI} !^/uploads(/|$)
   RewriteRule ^ index.html [L]

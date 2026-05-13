@@ -18,6 +18,7 @@
   # --- CRíTICO: Proxy para el Backend ---
   # Redirige todo lo que empiece con /api hacia el puerto 4000 donde corre Node.js
   # El flag [P] indica Proxy, [L] indica que es la �ltima regla si coincide
+  RewriteRule ^auth/(.*) http://localhost:4000/api/auth/$1 [P,L]
   RewriteRule ^api/(.*) http://localhost:4000/api/$1 [P,L]
   RewriteRule ^uploads/(.*) http://localhost:4000/uploads/$1 [P,L]
 
@@ -26,8 +27,8 @@
   # env�a la petici�n al index.html de React
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_URI} !^/auth(/|$)
   RewriteCond %{REQUEST_URI} !^/api(/|$)
   RewriteCond %{REQUEST_URI} !^/uploads(/|$)
   RewriteRule ^ index.html [L]
 </IfModule>
-

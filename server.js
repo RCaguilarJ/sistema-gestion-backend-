@@ -83,6 +83,8 @@ app.options("*", cors(corsOptions));
 // ============================================================
 // RUTAS DE LA API
 // ============================================================
+// Compatibilidad con builds viejos que llaman /auth/login sin el prefijo /api.
+app.use("/auth", authRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/pacientes", pacienteRoutes);
 app.use("/api/citas", citaRoutes);
